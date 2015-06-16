@@ -1,5 +1,5 @@
 {
-  "name": "asxc",
+  "name": "asx",
   "description": "Turn ES6 code into readable vanilla ES5 with source maps",
   "version": "1.0.0",
   "author": "Sebastian McKenzie <sebmck@gmail.com>",
@@ -53,7 +53,7 @@
     "trim-right": "^1.0.0"
   },
   "devDependencies": {
-    "babel": "5.1.13",
+    "babel": "5.5.8",
     "bluebird": "^2.9.25",
     "browserify": "^9.0.8",
     "chai": "^2.2.0",

@@ -32,11 +32,12 @@ class Compiler {
       config.srcPath = srcd;
     }
     if(!Files.isDirectory(out)){
-      throw new Error(`Invalid Output Path '${out}'`);
-    }else{
-      config.outDir = out;
-      config.outPath = Files.resolve(out,config.group,config.project);
+      Files.makeDirRecursive(out);
     }
+
+    config.outDir = Files.resolve(out);
+    config.outPath = Files.resolve(out,config.group,config.project);
+
     return new Compiler(config);
   }
   static multi(config,out){

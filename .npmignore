@@ -2,6 +2,7 @@
 *.cache
 *.ipr
 *.iml
+*.iws
 *.md
 *.tgz
 *.tar.gz

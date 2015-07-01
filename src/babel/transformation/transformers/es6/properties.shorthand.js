@@ -1,16 +1,11 @@
-import * as t from "../../../types";
+export var visitor = {
+  Property(node) {
+    if (node.method) {
+      node.method = false;
+    }
 
-export function shouldVisit(node) {
-  return t.isProperty(node) && (node.method || node.shorthand);
-}
-
-export function Property(node) {
-  if (node.method) {
-    node.method = false;
+    if (node.shorthand) {
+      node.shorthand = false;
+    }
   }
-
-  if (node.shorthand) {
-    node.shorthand = false;
-    node.key = t.removeComments(t.clone(node.key));
-  }
-}
+};

@@ -6,10 +6,6 @@ export var metadata = {
   stage: 1
 };
 
-export function shouldVisit(node) {
-  return t.isExportDefaultSpecifier(node) || t.isExportNamespaceSpecifier(node);
-}
-
 function build(node, nodes, scope) {
   var first = node.specifiers[0];
   if (!t.isExportNamespaceSpecifier(first) && !t.isExportDefaultSpecifier(first)) return;
@@ -30,14 +26,16 @@ function build(node, nodes, scope) {
   build(node, nodes, scope);
 }
 
-export function ExportNamedDeclaration(node, parent, scope) {
-  var nodes = [];
-  build(node, nodes, scope);
-  if (!nodes.length) return;
+export var visitor = {
+  ExportNamedDeclaration(node, parent, scope) {
+    var nodes = [];
+    build(node, nodes, scope);
+    if (!nodes.length) return;
 
-  if (node.specifiers.length >= 1) {
-    nodes.push(node);
+    if (node.specifiers.length >= 1) {
+      nodes.push(node);
+    }
+
+    return nodes;
   }
-
-  return nodes;
-}
+};

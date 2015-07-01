@@ -3,7 +3,7 @@ import isNumber from "lodash/lang/isNumber";
 import isRegExp from "lodash/lang/isRegExp";
 import isString from "lodash/lang/isString";
 import traverse from "../traversal";
-import each from "lodash/collection/each";
+import type Scope from "../traversal/scope";
 import * as t from "./index";
 
 /**
@@ -51,7 +51,7 @@ export function toSequenceExpression(nodes: Array<Object>, scope: Scope): Object
       } else if (t.isVariableDeclaration(node)) {
         if (node.kind !== "var") return bailed = true; // bailed
 
-        each(node.declarations, function (declar) {
+        for (var declar of (node.declarations: Array)) {
           var bindings = t.getBindingIdentifiers(declar);
           for (var key in bindings) {
             declars.push({
@@ -63,7 +63,7 @@ export function toSequenceExpression(nodes: Array<Object>, scope: Scope): Object
           if (declar.init) {
             exprs.push(t.assignmentExpression("=", declar.id, declar.init));
           }
-        });
+        }
 
         ensureLastUndefined = true;
         continue;
@@ -75,8 +75,12 @@ export function toSequenceExpression(nodes: Array<Object>, scope: Scope): Object
         exprs.push(t.conditionalExpression(node.test, consequent, alternate));
       } else if (t.isBlockStatement(node)) {
         exprs.push(convert(node.body));
+      } else if (t.isEmptyStatement(node)) {
+        // empty statement so ensure the last item is undefined if we're last
+        ensureLastUndefined = true;
+        continue;
       } else {
-        // bailed, we can't understand this
+        // bailed, we can't turn this statement into an expression
         return bailed = true;
       }
 
@@ -103,16 +107,25 @@ export function toSequenceExpression(nodes: Array<Object>, scope: Scope): Object
 
 export function toKeyAlias(node: Object, key: Object = node.key) {
   var alias;
-  if (t.isIdentifier(key)) {
+
+  if (node.kind === "method") {
+    return toKeyAlias.uid++;
+  } else if (t.isIdentifier(key)) {
     alias = key.name;
   } else if (t.isLiteral(key)) {
     alias = JSON.stringify(key.value);
   } else {
     alias = JSON.stringify(traverse.removeProperties(t.cloneDeep(key)));
   }
-  if (node.computed) alias = `[${alias}]`;
+
+  if (node.computed) {
+    alias = `[${alias}]`;
+  }
+
   return alias;
 }
+
+toKeyAlias.uid = 0;
 
 /*
  * Description

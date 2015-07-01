@@ -1,17 +1,15 @@
 import explode from "./explode-assignable-expression";
 import * as t from "../../types";
 
-export default function (exports, opts) {
+export default function (opts) {
+  var exports = {};
+
   var isAssignment = function (node) {
     return node.operator === opts.operator + "=";
   };
 
   var buildAssignment = function (left, right) {
     return t.assignmentExpression("=", left, right);
-  };
-
-  exports.shouldVisit = function (node) {
-    return node.operator && (node.operator === opts.operator || node.operator === opts.operator + "=");
   };
 
   exports.ExpressionStatement = function (node, parent, scope, file) {
@@ -44,4 +42,6 @@ export default function (exports, opts) {
     if (node.operator !== opts.operator) return;
     return opts.build(node.left, node.right);
   };
-};
+
+  return exports;
+}

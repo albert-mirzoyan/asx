@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+    <meta charset="UTF-8">
+    <title></title>
+</head>
+<body>
+<script>
+
+    var Class  = (function(){
+        with(this.scope){
+            return this.define(function MyClass(){
+                this.name = NAME;
+            })
+        }
+    }).call({scope:{},define:function(constr){
+        this.scope.__proto__ = constr;
+        return constr;
+    }});
+
+    Class.NAME = 'GAGO';
+    console.info(new Class())
+</script>
+</body>
+</html>

@@ -9,18 +9,14 @@ import each from "lodash/collection/each";
 import has from "lodash/object/has";
 import * as t from "../../../types";
 
-export function ClassDeclaration(node, parent, scope, file) {
-  var shim = Decorator.take(node, 'shim');
-  if (shim) {
-    return new ClassPolyfillTransformer(this, file).run();
-  } else {
+export var visitor = {
+  ClassDeclaration(node, parent, scope, file) {
     return new ClassDeclarationTransformer(this, file).run();
+  },
+  ClassExpression(node, parent, scope, file) {
+    return new ClassExpressionTransformer(this, file).run();
   }
-}
-export function ClassExpression(node, parent, scope, file) {
-  return new ClassExpressionTransformer(this, file).run();
-}
-
+};
 
 class Decorator {
 
@@ -94,49 +90,39 @@ class ClassTransformer {
       return flags;
     }
   }
-
   get isPolyfilled() {
     return false;
   }
-
   get className() {
     return Object.defineProperty(this, 'className', {
       value: this.node.id
     }).className;
   }
-
   get classReference() {
     return Object.defineProperty(this, 'classReference', {
       value: this.className
     }).classReference;
   }
-
   get superName() {
     return Object.defineProperty(this, 'superName', {
       value: this.node.superClass
     }).superName;
   }
-
   get superReference() {
     return Object.defineProperty(this, 'superReference', {
       value: t.identifier('E56P')
     }).superReference;
   }
-
-
-
   get closureParameters() {
     return Object.defineProperty(this, 'closureParameters', {
       value: [this.superReference]
     }).closureParameters;
   }
-
   get closureArguments() {
     return Object.defineProperty(this, 'closureArguments', {
       value: []
     }).closureArguments;
   }
-
   get closureBody() {
     return Object.defineProperty(this, 'closureBody', {
       value: t.blockStatement([
@@ -146,7 +132,6 @@ class ClassTransformer {
       ])
     }).closureBody;
   }
-
   get classInheritace() {
     return [t.expressionStatement(t.callExpression(
       t.memberExpression(t.identifier('E56'), t.identifier('IC')), [
@@ -154,15 +139,12 @@ class ClassTransformer {
         this.superReference
       ]))];
   }
-
   get classMembers() {
     return [t.expressionStatement(t.callExpression(
       t.memberExpression(t.identifier('Class'), t.identifier('define')), [
         this.classReference, t.objectExpression(this.members)
       ]))];
   }
-
-
   get classConstructor() {
     return Object.defineProperty(this, 'classConstructor', {
       value: t.variableDeclaration("var", [
@@ -195,19 +177,11 @@ class ClassTransformer {
     this.scope = path.scope;
     this.node = path.node;
   }
-
-  /**
-   * Description
-   *
-   * @returns {Array}
-   */
-
   run() {
     this.initMembers();
     this.initConstructor();
     return this.buildClosure();
   }
-
   initConstructor() {
     var params = [];
     var body = [];
@@ -229,9 +203,7 @@ class ClassTransformer {
       this.node.id,params,
       t.blockStatement(body)
     );
-
   }
-
   initMembers() {
     var classBody = this.node.body.body;
     var classBodyPaths = this.path.get("body").get("body");
@@ -333,63 +305,111 @@ class ClassTransformer {
     var p = [], d = [],m;
     if (getter) {
       if(getter.decorators){
-        Decorator.removeCompilerDecoratator(getter)
+        Decorator.removeCompilerDecoratator(getter);
         d = d.concat(getter.decorators.map(d=>d.expression));
       }
       getter.value.id = t.identifier(getter.key.name + '_getter');
-      p.push(t.property("init", t.literal("#g"), getter.value))
+      p.push(t.property("init", t.identifier("G"), getter.value))
     }
     if (setter) {
       if(setter.decorators){
-        Decorator.removeCompilerDecoratator(setter)
+        Decorator.removeCompilerDecoratator(setter);
         d = d.concat(setter.decorators.map(d=>d.expression));
       }
       setter.value.id = t.identifier(setter.key.name + '_setter');
-      p.push(t.property("init", t.identifier("#s"), setter.value))
+      p.push(t.property("init", t.identifier("S"), setter.value))
     }
     if (field) {
+      if(field.typeAnnotation){
+        p.push(t.property("init", t.identifier("T"),this.convertType(field.typeAnnotation.typeAnnotation)))
+      }
       if(field.decorators){
-        Decorator.removeCompilerDecoratator(field)
+        Decorator.removeCompilerDecoratator(field);
         d = d.concat(field.decorators.map(d=>d.expression));
       }
       m = ClassTransformer.getMask(field);
       if(m){
-        p.unshift(t.property("init", t.identifier("#m"), t.literal(m)));
+        p.unshift(t.property("init", t.identifier("M"), t.literal(m)));
       }
       if(field.value){
-        p.push(t.property("init", t.identifier("#v"), t.functionExpression(null, [], t.blockStatement([
+        p.push(t.property("init", t.identifier("V"), t.functionExpression(null, [], t.blockStatement([
           t.returnStatement(field.value)
         ]))));
       }
     }
     if(d.length){
-      p.push(t.property("init", t.identifier("#a"), t.arrayExpression(d)))
+      p.push(t.property("init", t.literal("A"), t.arrayExpression(d)))
     }
     return t.objectExpression(p);
   }
-
   initMethod(member) {
-    var p = [], m = ClassTransformer.getMask(member);
-    member.value.id = member.key;
+    var p = [],d=[],m = ClassTransformer.getMask(member);
+    //member.value.id = member.key;
+    if(member.value.returnType){
+      p.push(t.property("init", t.identifier("T"), this.convertType(member.value.returnType.typeAnnotation)));
+    }
+    if(member.value.params && member.value.params.length){
+      var ps  = [];
+      member.value.params.forEach(p=>ps.push(this.convertMethodParam(p)));
+      p.push(t.property("init", t.identifier("property"), t.objectExpression(ps)));
+    }
     if (member.decorators) {
       Decorator.all(member,'decorator').forEach(d=>{
         d.expression = t.memberExpression(t.identifier('Asx'),d.expression);
       });
       Decorator.removeCompilerDecoratator(member);
-      p.unshift(t.property("init", t.literal("#a"), t.arrayExpression(
-        member.decorators.map(d=>d.expression)
-      )));
+      d = d.concat(member.decorators.map(d=>d.expression));
     }
-    if(member.value.id.name=='default'){
+
+    if(d.length){
+      p.unshift(t.property("init", t.identifier("A"), t.arrayExpression(d)));
+    }
+    /*if(member.value.id.name=='default'){
       member.value.id = t.identifier('_default');
-    }
-    p.push(t.property("init", t.identifier("#f"), member.value));
+    }*/
+    p.push(t.property("init", t.identifier("F"), member.value));
     if(m){
-      p.unshift(t.property("init", t.identifier("#m"), t.literal(m)));
+      p.unshift(t.property("init", t.identifier("M"), t.literal(m)));
     }
     return t.objectExpression(p);
   }
+  convertMethodParam(param) {
+    var name, args = [], rest = 0;
+    if (param.type == 'RestElement') {
+      rest = 1;
+      name = param.argument
 
+    } else if (param.type == 'AssignmentPattern') {
+      name = param.left;
+      args.push(t.functionExpression(null,[],t.blockStatement([
+        t.returnStatement(param.right)
+      ])))
+    } else {
+      name = param;
+    }
+    if (param.typeAnnotation) {
+      args.unshift(this.convertType(param.typeAnnotation.typeAnnotation))
+    } else {
+      args.unshift(this.convertType(t.genericTypeAnnotation(t.identifier('Object'))))
+    }
+
+    var ret = t.callExpression(t.memberExpression(t.identifier('Asx'),t.identifier('arg')),args);
+    if (rest){
+      ret = t.memberExpression(ret,t.identifier('rest'));
+    }
+    return t.property("init", name, ret)
+  }
+  convertType(type){
+    var parameters = [type.id];
+    if(type.typeParameters){
+      var tps  = type.typeParameters;
+      tps.params.forEach(p=>{
+        parameters.push(this.convertType(p));
+      })
+    }
+    var exp = t.callExpression(t.memberExpression(t.identifier('Asx'),t.identifier('type')),parameters);
+    return exp;
+  }
   buildClosure(){
     var closure = t.functionDeclaration(
       t.identifier(this.node.id.name+'Class'),
@@ -449,7 +469,7 @@ class ClassTransformer {
 }
 
 class ClassExpressionTransformer extends ClassTransformer {
-  constructor(path:TraversalPath, file:File) {
+  constructor(path:TraversalPath,file:File) {
     super(path,file);
   }
   buildClosure(body) {
@@ -457,7 +477,7 @@ class ClassExpressionTransformer extends ClassTransformer {
   }
 }
 class ClassDeclarationTransformer extends ClassTransformer {
-  constructor(path:TraversalPath, file:File) {
+  constructor(path:TraversalPath,file:File) {
     super(path,file);
   }
   get closureParameters() {

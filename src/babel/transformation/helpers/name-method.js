@@ -2,25 +2,32 @@ import getFunctionArity from "./get-function-arity";
 import * as util from  "../../util";
 import * as t from "../../types";
 
+function visitIdentifier(context, node, scope, state) {
+  // check if this node matches our function id
+  if (node.name !== state.name) return;
+
+  // check that we don't have a local variable declared as that removes the need
+  // for the wrapper
+  var localDeclar = scope.getBindingIdentifier(state.name);
+  if (localDeclar !== state.outerDeclar) return;
+
+  state.selfReference = true;
+  context.stop();
+}
+
 var visitor = {
-  enter(node, parent, scope, state) {
-    // check if this node is a referenced identifier that matches the same as our
-    // function id
-    if (!this.isReferencedIdentifier({ name: state.name })) return;
+  ReferencedIdentifier(node, parent, scope, state) {
+    visitIdentifier(this, node, scope, state);
+  },
 
-    // check that we don't have a local variable declared as that removes the need
-    // for the wrapper
-    var localDeclar = scope.getBindingIdentifier(state.name);
-    if (localDeclar !== state.outerDeclar) return;
-
-    state.selfReference = true;
-    this.stop();
+  BindingIdentifier(node, parent, scope, state) {
+    visitIdentifier(this, node, scope, state);
   }
 };
 
 var wrap = function (state, method, id, scope) {
   if (state.selfReference) {
-    if (scope.hasBinding(id.name)) {
+    if (scope.hasBinding(id.name) && !scope.hasGlobal(id.name)) {
       // we can just munge the local binding
       scope.rename(id.name);
     } else {
@@ -46,6 +53,7 @@ var wrap = function (state, method, id, scope) {
   }
 
   method.id = id;
+  scope.getProgramParent().references[id.name] = true;
 };
 
 var visit = function (node, name, scope) {
@@ -60,10 +68,10 @@ var visit = function (node, name, scope) {
   // check to see if we have a local binding of the id we're setting inside of
   // the function, this is important as there are caveats associated
 
-  var bindingInfo = scope.getOwnBindingInfo(name);
+  var binding = scope.getOwnBinding(name);
 
-  if (bindingInfo) {
-    if (bindingInfo.kind === "param") {
+  if (binding) {
+    if (binding.kind === "param") {
       // safari will blow up in strict mode with code like:
       //
       //   var t = function t(t) {};
@@ -125,8 +133,8 @@ export function bare(node, parent, scope) {
     id = parent.id;
 
     if (t.isIdentifier(id)) {
-      var bindingInfo = scope.parent.getBinding(id.name);
-      if (bindingInfo && bindingInfo.constant && scope.getBinding(id.name) === bindingInfo) {
+      var binding = scope.parent.getBinding(id.name);
+      if (binding && binding.constant && scope.getBinding(id.name) === binding) {
         // always going to reference this method
         node.id = id;
         return;

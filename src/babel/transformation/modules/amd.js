@@ -6,8 +6,8 @@ import * as util from  "../../util";
 import * as t from "../../types";
 
 export default class AMDFormatter extends DefaultFormatter {
-  init() {
-    CommonFormatter.prototype._init.call(this, this.hasNonDefaultExports);
+  setup() {
+    CommonFormatter.prototype._setup.call(this, this.hasNonDefaultExports);
   }
 
   buildDependencyLiterals() {
@@ -72,7 +72,7 @@ export default class AMDFormatter extends DefaultFormatter {
     this.getExternalReference(node);
   }
 
-  importSpecifier(specifier, node, nodes) {
+  importSpecifier(specifier, node, nodes, scope) {
     var key = node.source.value;
     var ref = this.getExternalReference(node);
 
@@ -90,11 +90,11 @@ export default class AMDFormatter extends DefaultFormatter {
       // import * as bar from "foo";
     } else if (!includes(this.file.dynamicImported, node) && t.isSpecifierDefault(specifier) && !this.noInteropRequireImport) {
       // import foo from "foo";
-      var uid = this.scope.generateUidIdentifier(specifier.local.name);
+      var uid = scope.generateUidIdentifier(specifier.local.name);
       nodes.push(t.variableDeclaration("var", [
-        t.variableDeclarator(uid, t.callExpression(this.file.addHelper("interop-require"), [ref]))
+        t.variableDeclarator(uid, t.callExpression(this.file.addHelper("interop-require-default"), [ref]))
       ]));
-      ref = uid;
+      ref = t.memberExpression(uid, t.identifier("default"));
     } else {
       // import { foo } from "foo";
       var imported = specifier.imported;
@@ -102,7 +102,7 @@ export default class AMDFormatter extends DefaultFormatter {
       ref = t.memberExpression(ref, imported);
     }
 
-    this.internalRemap[specifier.local.name] = ref;
+    this.remaps.add(scope, specifier.local.name, ref);
   }
 
   exportSpecifier(specifier, node, nodes) {

@@ -5,6 +5,8 @@ export NODE_ENV = test
 
 .PHONY: clean build bootstrap build-core clean-core
 
+watch-core:
+	node $(BABEL_CMD) -w src --out-dir lib --copy-files
 build-core: clean-core
 	node $(BABEL_CMD) src --out-dir lib --copy-files
 

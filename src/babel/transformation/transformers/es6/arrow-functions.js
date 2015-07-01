@@ -1,11 +1,11 @@
 import * as t from "../../../types";
 
-export var shouldVisit = t.isArrowFunctionExpression;
+export var visitor = {
+  ArrowFunctionExpression(node) {
+    t.ensureBlock(node);
 
-export function ArrowFunctionExpression(node) {
-  t.ensureBlock(node);
-
-  node.expression = false;
-  node.type = "FunctionExpression";
-  node.shadow = true;
-}
+    node.expression = false;
+    node.type = "FunctionExpression";
+    node.shadow = true;
+  }
+};

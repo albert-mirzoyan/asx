@@ -45,13 +45,6 @@ export default class AsxFormatter extends DefaultFormatter {
     }
     return this.exports[name];
   }
-  buildDependencyLiterals() {
-    var names = [];
-    for (var name in this.ids) {
-      names.push(t.literal(name));
-    }
-    return names;
-  }
 
   /**
    * Wrap the entire body in a `define` wrapper.
@@ -128,31 +121,31 @@ export default class AsxFormatter extends DefaultFormatter {
         t.valueToNode(this.exports)
       ))
     }
-    if(body.length){
-      if(exports){
-        var ret = [];
-        Object.keys(exports).forEach(key=>{
-          var val = exports[key];
-          if(typeof val=='string') {
-            ret.push(t.property('init',
-              t.literal(key), t.identifier(val == '*' ? key : val)
-            ))
-          }else{
-            ret.push(t.property('init',
-              t.literal(key), val
-            ))
-          }
-        });
-        body.push(t.returnStatement(
-          t.objectExpression(ret)
-        ));
-      }
-      var initializer  = t.functionExpression(null, [t.identifier('asx')], t.blockStatement(body));
-      definer.push(t.property('init',
-        t.identifier('execute'),
-        initializer
-      ))
+
+    if(exports){
+      var ret = [];
+      Object.keys(exports).forEach(key=>{
+        var val = exports[key];
+        if(typeof val=='string') {
+          ret.push(t.property('init',
+            t.literal(key), t.identifier(val == '*' ? key : val)
+          ))
+        }else{
+          ret.push(t.property('init',
+            t.literal(key), val
+          ))
+        }
+      });
+      body.push(t.returnStatement(
+        t.objectExpression(ret)
+      ));
     }
+    var initializer  = t.functionExpression(null, [t.identifier('asx')], t.blockStatement(body));
+    definer.push(t.property('init',
+      t.identifier('execute'),
+      initializer
+    ));
+
     definitions.forEach(item=>{
 
       if(item._class){
@@ -167,11 +160,8 @@ export default class AsxFormatter extends DefaultFormatter {
         ))
       }
 
-    })
+    });
     definer = t.objectExpression(definer);
-
-
-
     /*
     var definer = t.functionExpression(null, [t.identifier("module")], t.blockStatement(body));
     if(options.bind){

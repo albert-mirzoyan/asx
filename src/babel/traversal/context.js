@@ -1,5 +1,4 @@
-import TraversalPath from "./path";
-import compact from "lodash/array/compact";
+import NodePath from "./path";
 import * as t from "../types";
 
 export default class TraversalContext {
@@ -8,15 +7,40 @@ export default class TraversalContext {
     this.scope      = scope;
     this.state      = state;
     this.opts       = opts;
+    this.queue      = null;
   }
 
-  create(node, obj, key) {
-    return TraversalPath.get(this.parentPath, this, node, obj, key);
+  shouldVisit(node) {
+    var opts = this.opts;
+    if (opts.enter || opts.exit) return true;
+
+    if (opts[node.type]) return true;
+
+    var keys = t.VISITOR_KEYS[node.type];
+    if (!keys || !keys.length) return false;
+
+    for (var key of (keys: Array)) {
+      if (node[key]) return true;
+    }
+
+    return false;
   }
 
-  visitMultiple(nodes, node, key) {
+  create(node, obj, key, listKey) {
+    var path = NodePath.get({
+      parentPath: this.parentPath,
+      parent: node,
+      container: obj,
+      key: key,
+      listKey
+    });
+    path.unshiftContext(this);
+    return path;
+  }
+
+  visitMultiple(container, parent, listKey) {
     // nothing to traverse!
-    if (nodes.length === 0) return false;
+    if (container.length === 0) return false;
 
     var visited = [];
 
@@ -24,17 +48,19 @@ export default class TraversalContext {
     var stop  = false;
 
     // build up initial queue
-    for (let i = 0; i < nodes.length; i++) {
-      if (nodes[i]) queue.push(this.create(node, nodes, i));
+    for (let key = 0; key < container.length; key++) {
+      var self = container[key];
+      if (self && this.shouldVisit(self)) {
+        queue.push(this.create(parent, container, key, listKey));
+      }
     }
 
     // visit the queue
-    for (let i = 0; i < queue.length; i++) {
-      var path = queue[i];
+    for (let path of (queue: Array)) {
+      path.resync();
+
       if (visited.indexOf(path.node) >= 0) continue;
       visited.push(path.node);
-
-      path.setContext(this.parentPath, this, path.key);
 
       if (path.visit()) {
         stop = true;
@@ -42,16 +68,21 @@ export default class TraversalContext {
       }
     }
 
-    // clear context from queued paths
-    for (let i = 0; i < queue.length; i++) {
-      //queue[i].clearContext();
+    for (let path of (queue: Array)) {
+      path.shiftContext();
     }
+
+    this.queue = null;
 
     return stop;
   }
 
   visitSingle(node, key) {
-    return this.create(node, node, key).visit();
+    if (this.shouldVisit(node[key])) {
+      var path = this.create(node, node, key);
+      path.visit();
+      path.shiftContext();
+    }
   }
 
   visit(node, key) {

@@ -1,5 +1,5 @@
 import TraversalContext from "./context";
-import { explode, verify } from "./visitors";
+import * as visitors from "./visitors";
 import * as messages from "../messages";
 import includes from "lodash/collection/includes";
 import * as t from "../types";
@@ -14,7 +14,8 @@ export default function traverse(parent, opts, scope, state, parentPath) {
   }
 
   if (!opts) opts = {};
-  verify(opts);
+
+  visitors.explode(opts);
 
   // array of nodes
   if (Array.isArray(parent)) {
@@ -26,55 +27,42 @@ export default function traverse(parent, opts, scope, state, parentPath) {
   }
 }
 
-traverse.verify = verify;
-traverse.explode = explode;
+traverse.visitors = visitors;
+traverse.verify = visitors.verify;
+traverse.explode = visitors.explode;
 
-traverse.node = function (node, opts, scope, state, parentPath) {
+traverse.node = function (node, opts, scope, state, parentPath, skipKeys?) {
   var keys = t.VISITOR_KEYS[node.type];
   if (!keys) return;
 
   var context = new TraversalContext(scope, opts, state, parentPath);
-  for (var i = 0; i < keys.length; i++) {
-    if (context.visit(node, keys[i])) {
-      return;
-    }
+  for (var key of (keys: Array)) {
+    if (skipKeys && skipKeys[key]) continue;
+    if (context.visit(node, key)) return;
   }
 };
 
 const CLEAR_KEYS = [
   "trailingComments", "leadingComments", "extendedRange",
-  "_scopeInfo" ,"_paths",
+  "_scopeInfo", "_paths",
   "tokens", "range", "start", "end", "loc", "raw"
 ];
 
-function clearNode(node) {
+traverse.clearNode = function (node) {
   for (var i = 0; i < CLEAR_KEYS.length; i++) {
-    var key = CLEAR_KEYS[i];
-    if (node[key] != null) node[key] = null;
+    let key = CLEAR_KEYS[i];
+    if (node[key] != null) node[key] = undefined;
   }
-
-  for (var key in node) {
-    var val = node[key];
-    if (Array.isArray(val)) {
-      delete val._paths;
-    }
-  }
-}
+};
 
 var clearVisitor = {
   noScope: true,
-  exit: clearNode
+  exit: traverse.clearNode
 };
-
-function clearComments(comments) {
-  for (var i = 0; i < comments.length; i++) {
-    clearNode(comments[i]);
-  }
-}
 
 traverse.removeProperties = function (tree) {
   traverse(tree, clearVisitor);
-  clearNode(tree);
+  traverse.clearNode(tree);
 
   return tree;
 };

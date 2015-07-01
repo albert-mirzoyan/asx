@@ -1,14 +1,13 @@
 import DefaultFormatter from "./_default";
-import includes from "lodash/collection/includes";
 import * as util from  "../../util";
 import * as t from "../../types";
 
 export default class CommonJSFormatter extends DefaultFormatter {
-  init() {
-    this._init(this.hasLocalExports);
+  setup() {
+    this._setup(this.hasLocalExports);
   }
 
-  _init(conditional) {
+  _setup(conditional) {
     var file  = this.file;
     var scope = file.scope;
 
@@ -38,7 +37,7 @@ export default class CommonJSFormatter extends DefaultFormatter {
     }
   }
 
-  importSpecifier(specifier, node, nodes) {
+  importSpecifier(specifier, node, nodes, scope) {
     var variableName = specifier.local;
 
     var ref = this.getExternalReference(node, nodes);
@@ -48,17 +47,17 @@ export default class CommonJSFormatter extends DefaultFormatter {
       if (this.isModuleType(node, "absolute")) {
         // absolute module reference
       } else if (this.isModuleType(node, "absoluteDefault")) {
-        this.internalRemap[variableName.name] = ref;
+        this.remaps.add(scope, variableName.name, ref);
       } else if (this.noInteropRequireImport) {
-        this.internalRemap[variableName.name] = t.memberExpression(ref, t.identifier("default"));
+        this.remaps.add(scope, variableName.name, t.memberExpression(ref, t.identifier("default")));
       } else {
-        var uid = this.scope.generateUidBasedOnNode(node, "import");
+        var uid = this.scope.generateUidIdentifierBasedOnNode(node, "import");
 
         nodes.push(t.variableDeclaration("var", [
           t.variableDeclarator(uid, t.callExpression(this.file.addHelper("interop-require-default"), [ref]))
         ]));
 
-        this.internalRemap[variableName.name] = t.memberExpression(uid, t.identifier("default"));
+        this.remaps.add(scope, variableName.name, t.memberExpression(uid, t.identifier("default")));
       }
     } else {
       if (t.isImportNamespaceSpecifier(specifier)) {
@@ -72,7 +71,7 @@ export default class CommonJSFormatter extends DefaultFormatter {
         ]));
       } else {
         // import { foo } from "foo";
-        this.internalRemap[variableName.name] = t.memberExpression(ref, specifier.imported);
+        this.remaps.add(scope, variableName.name, t.memberExpression(ref, specifier.imported));
       }
     }
   }
@@ -84,7 +83,7 @@ export default class CommonJSFormatter extends DefaultFormatter {
     }, true));
   }
 
-  exportSpecifier(specifier, node, nodes) {
+  exportSpecifier(specifier) {
     if (this.doDefaultExportInterop(specifier)) {
       this.hasDefaultOnlyExport = true;
     }
@@ -92,7 +91,7 @@ export default class CommonJSFormatter extends DefaultFormatter {
     DefaultFormatter.prototype.exportSpecifier.apply(this, arguments);
   }
 
-  exportDeclaration(node, nodes) {
+  exportDeclaration(node) {
     if (this.doDefaultExportInterop(node)) {
       this.hasDefaultOnlyExport = true;
     }
@@ -101,8 +100,6 @@ export default class CommonJSFormatter extends DefaultFormatter {
   }
 
   _getExternalReference(node, nodes) {
-    var source = node.source.value;
-
     var call = t.callExpression(t.identifier("require"), [node.source]);
     var uid;
 
@@ -111,7 +108,7 @@ export default class CommonJSFormatter extends DefaultFormatter {
     } else if (this.isModuleType(node, "absoluteDefault")) {
       call = t.memberExpression(call, t.identifier("default"));
     } else {
-      uid = this.scope.generateUidBasedOnNode(node, "import");
+      uid = this.scope.generateUidIdentifierBasedOnNode(node, "import");
     }
 
     uid = uid || node.specifiers[0].local;

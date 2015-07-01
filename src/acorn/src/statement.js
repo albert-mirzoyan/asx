@@ -83,10 +83,13 @@ pp.parseStatement = function(declaration, topLevel) {
     return starttype === tt._import ? this.parseImport(node) : this.parseExport(node)
 
   case tt.name:
-    if (this.options.features["es7.asyncFunctions"] && this.value === "async" && this.lookahead().type === tt._function) {
-      this.next();
-      this.expect(tt._function);
-      return this.parseFunction(node, true, false, true);
+    if (this.options.features["es7.asyncFunctions"] && this.value === "async") {
+      var lookahead = this.lookahead();
+      if (lookahead.type === tt._function && !this.canInsertSemicolon.call(lookahead)) {
+        this.next();
+        this.expect(tt._function);
+        return this.parseFunction(node, true, false, true);
+      }
     }
 
     // If the statement does not start with a statement keyword or a
@@ -119,7 +122,7 @@ pp.parseDecorators = function(allowExport) {
   }
 
   if (this.type !== tt._class) {
-    this.raise(this.start, "Leading decorators must be attached to a class declaration "+JSON.stringify(this.type));
+    this.raise(this.start, "Leading decorators must be attached to a class declaration");
   }
 }
 
@@ -127,20 +130,8 @@ pp.parseDecorator = function(allowExport) {
   if (!this.options.features["es7.decorators"]) {
     this.unexpected()
   }
-  let node = this.startNode();
-  if(this.fullCharCodeAtPos()==32){
-    this.next();
-    return this.finishNode(node, "Decorator")
-  }
-  this.next();
-  if(this.type === tt.at){
-    node.compiler = true;
-    if(this.fullCharCodeAtPos()==32){
-      this.next();
-      return this.finishNode(node, "Decorator")
-    }
-    this.next();
-  }
+  let node = this.startNode()
+  this.next()
   node.expression = this.parseMaybeAssign()
   return this.finishNode(node, "Decorator")
 }
@@ -180,12 +171,6 @@ pp.parseDoStatement = function(node) {
   this.labels.push(loopLabel)
   node.body = this.parseStatement(false)
   this.labels.pop()
-  if (this.options.features["es7.doExpressions"] && this.type !== tt._while) {
-    let container = this.startNodeAt(start)
-    container.expression = this.finishNode(node, "DoExpression")
-    this.semicolon()
-    return this.finishNode(container, "ExpressionStatement")
-  }
   this.expect(tt._while)
   node.test = this.parseParenExpression()
   if (this.options.ecmaVersion >= 6)
@@ -586,7 +571,7 @@ pp.parseExport = function(node) {
       this.parseExportFrom(node)
       return this.finishNode(node, "ExportAllDeclaration")
     }
-  } else if (this.isExportDefaultSpecifier()) {
+  } else if (this.options.features["es7.exportExtensions"] && this.isExportDefaultSpecifier()) {
     let specifier = this.startNode()
     specifier.exported = this.parseIdent(true)
     node.specifiers = [this.finishNode(specifier, "ExportDefaultSpecifier")]

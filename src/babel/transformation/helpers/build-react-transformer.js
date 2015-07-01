@@ -9,14 +9,10 @@ import esutils from "esutils";
 import * as react from "./react";
 import * as t from "../../types";
 
-export default function (exports, opts) {
-  exports.shouldVisit = function (node) {
-    if (t.isJSX(node)) return true;
-    if (react.isCreateClass(node)) return true;
-    return false;
-  };
+export default function (opts) {
+  var visitor = {};
 
-  exports.JSXIdentifier = function (node, parent) {
+  visitor.JSXIdentifier = function (node) {
     if (node.name === "this" && this.isReferenced()) {
       return t.thisExpression();
     } else if (esutils.keyword.isIdentifierNameES6(node.name)) {
@@ -26,22 +22,22 @@ export default function (exports, opts) {
     }
   };
 
-  exports.JSXNamespacedName = function (node, parent, scope, file) {
+  visitor.JSXNamespacedName = function () {
     throw this.errorWithNode(messages.get("JSXNamespacedTags"));
   };
 
-  exports.JSXMemberExpression = {
+  visitor.JSXMemberExpression = {
     exit(node) {
       node.computed = t.isLiteral(node.property);
       node.type = "MemberExpression";
     }
   };
 
-  exports.JSXExpressionContainer = function (node) {
+  visitor.JSXExpressionContainer = function (node) {
     return node.expression;
   };
 
-  exports.JSXAttribute = {
+  visitor.JSXAttribute = {
     enter(node) {
       var value = node.value;
       if (t.isLiteral(value) && isString(value.value)) {
@@ -55,7 +51,7 @@ export default function (exports, opts) {
     }
   };
 
-  exports.JSXOpeningElement = {
+  visitor.JSXOpeningElement = {
     exit(node, parent, scope, file) {
       parent.children = react.buildChildren(parent);
 
@@ -145,7 +141,7 @@ export default function (exports, opts) {
     return attribs;
   };
 
-  exports.JSXElement = {
+  visitor.JSXElement = {
     exit(node) {
       var callExpr = node.openingElement;
 
@@ -167,7 +163,8 @@ export default function (exports, opts) {
 
     for (var i = 0; i < props.length; i++) {
       var prop = props[i];
-      if (t.isIdentifier(prop.key, { name: "displayName" })) {
+      var key = t.toComputedKey(prop);
+      if (t.isLiteral(key, { value: "displayName" })) {
         safe = false;
         break;
       }
@@ -178,15 +175,15 @@ export default function (exports, opts) {
     }
   };
 
-  exports.ExportDefaultDeclaration = function (node, parent, scope, file) {
+  visitor.ExportDefaultDeclaration = function (node, parent, scope, file) {
     if (react.isCreateClass(node.declaration)) {
       addDisplayName(file.opts.basename, node.declaration);
     }
   };
 
-  exports.AssignmentExpression =
-  exports.Property =
-  exports.VariableDeclarator = function (node) {
+  visitor.AssignmentExpression =
+  visitor.Property =
+  visitor.VariableDeclarator = function (node) {
     var left, right;
 
     if (t.isAssignmentExpression(node)) {
@@ -208,4 +205,6 @@ export default function (exports, opts) {
       addDisplayName(left.name, right);
     }
   };
-};
+
+  return visitor;
+}

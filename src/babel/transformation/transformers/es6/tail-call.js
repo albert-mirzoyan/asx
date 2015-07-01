@@ -1,24 +1,28 @@
 import reduceRight from "lodash/collection/reduceRight";
 import * as messages from "../../../messages";
 import flatten from "lodash/array/flatten";
-import traverse from "../../../traversal";
 import * as util from  "../../../util";
 import map from "lodash/collection/map";
 import * as t from "../../../types";
 
-exports.Function = function (node, parent, scope, file) {
-  if (node.generator || node.async) return;
-  var tailCall = new TailCallTransformer(this, scope, file);
-  tailCall.run();
+export var metadata = {
+  group: "builtin-trailing"
+};
+
+export var visitor = {
+  Function(node, parent, scope, file) {
+    if (node.generator || node.async) return;
+    var tailCall = new TailCallTransformer(this, scope, file);
+    tailCall.run();
+  }
 };
 
 function returnBlock(expr) {
   return t.blockStatement([t.returnStatement(expr)]);
 }
 
-// looks for and replaces tail recursion calls
-var firstPass = traverse.explode({
-  enter(node, parent, scope, state) {
+var visitor = {
+  enter(node, parent) {
     if (t.isTryStatement(parent)) {
       if (node === parent.block) {
         this.skip();
@@ -29,70 +33,46 @@ var firstPass = traverse.explode({
   },
 
   ReturnStatement(node, parent, scope, state) {
-    this.skip();
     return state.subTransform(node.argument);
   },
 
-  Function(node, parent, scope, state) {
+  Function() {
     this.skip();
   },
 
   VariableDeclaration(node, parent, scope, state) {
-    this.skip();
     state.vars.push(node);
-  }
-});
+  },
 
-// hoists up function declarations, replaces `this` and `arguments` and marks
-// them as needed
-var secondPass = traverse.explode({
   ThisExpression(node, parent, scope, state) {
-    state.needsThis = true;
-    return state.getThisId();
+    if (!state.isShadowed) {
+      state.needsThis = true;
+      state.thisPaths.push(this);
+    }
   },
 
   ReferencedIdentifier(node, parent, scope, state) {
-    if (node.name !== "arguments") return;
-    state.needsArguments = true;
-    return state.getArgumentsId();
-  },
-
-  Function(node, parent, scope, state) {
-    this.skip();
-    if (this.isFunctionDeclaration()) {
-      node = t.variableDeclaration("var", [
-        t.variableDeclarator(node.id, t.toExpression(node))
-      ]);
-      node._blockHoist = 2;
-      return node;
+    if (node.name === "arguments" && (!state.isShadowed || node._shadowedFunctionLiteral)) {
+      state.needsArguments = true;
+      state.argumentsPaths.push(this);
     }
   }
-});
-
-// optimizes recursion by removing `this` and `arguments` if they aren't used
-var thirdPass = traverse.explode({
-  ExpressionStatement(node, parent, scope, state) {
-    var expr = node.expression;
-    if (!t.isAssignmentExpression(expr)) return;
-
-    if (!state.needsThis && expr.left === state.getThisId()) {
-      this.remove();
-    } else if (!state.needsArguments && expr.left === state.getArgumentsId() && t.isArrayExpression(expr.right)) {
-      return map(expr.right.elements, function (elem) {
-        return t.expressionStatement(elem);
-      });
-    }
-  }
-});
+};
 
 class TailCallTransformer {
   constructor(path, scope, file) {
     this.hasTailRecursion = false;
-    this.needsArguments   = false;
-    this.setsArguments    = false;
-    this.needsThis        = false;
-    this.ownerId          = path.node.id;
-    this.vars             = [];
+
+    this.needsArguments = false;
+    this.argumentsPaths = [];
+    this.setsArguments  = false;
+
+    this.needsThis = false;
+    this.thisPaths = [];
+
+    this.isShadowed = path.isArrowFunctionExpression() || path.is("shadow");
+    this.ownerId    = path.node.id;
+    this.vars       = [];
 
     this.scope = scope;
     this.path  = path;
@@ -149,7 +129,6 @@ class TailCallTransformer {
   }
 
   run() {
-    var scope = this.scope;
     var node  = this.node;
 
     // only tail recursion can be optimized as for now, so we can skip anonymous
@@ -158,10 +137,12 @@ class TailCallTransformer {
     if (!ownerId) return;
 
     // traverse the function and look for tail recursion
-    this.path.traverse(firstPass, this);
+    this.path.traverse(visitor, this);
 
+    // has no tail call recursion
     if (!this.hasTailRecursion) return;
 
+    // the function binding isn't constant so we can't be sure that it's the same function :(
     if (this.hasDeopt()) {
       this.file.log.deopt(node, messages.get("tailCallReassignmentDeopt"));
       return;
@@ -169,21 +150,27 @@ class TailCallTransformer {
 
     //
 
-    this.path.traverse(secondPass, this);
-
-    if (!this.needsThis || !this.needsArguments) {
-      this.path.traverse(thirdPass, this);
-    }
-
     var body = t.ensureBlock(node).body;
+
+    for (var i = 0; i < body.length; i++) {
+      var bodyNode = body[i];
+      if (!t.isFunctionDeclaration(bodyNode)) continue;
+
+      bodyNode = body[i] = t.variableDeclaration("var", [
+        t.variableDeclarator(bodyNode.id, t.toExpression(bodyNode))
+      ]);
+      bodyNode._blockHoist = 2;
+    }
 
     if (this.vars.length > 0) {
       var declarations = flatten(map(this.vars, function (decl) {
         return decl.declarations;
       }));
+
       var assignment = reduceRight(declarations, function (expr, decl) {
         return t.assignmentExpression("=", decl.id, expr);
       }, t.identifier("undefined"));
+
       var statement = t.expressionStatement(assignment);
       statement._blockHoist = Infinity;
       body.unshift(statement);
@@ -191,7 +178,9 @@ class TailCallTransformer {
 
     var paramDecls = this.paramDecls;
     if (paramDecls.length > 0) {
-      body.unshift(t.variableDeclaration("var", paramDecls));
+      var paramDecl = t.variableDeclaration("var", paramDecls);
+      paramDecl._blockHoist = Infinity;
+      body.unshift(paramDecl);
     }
 
     body.unshift(t.expressionStatement(
@@ -199,23 +188,30 @@ class TailCallTransformer {
     );
 
     node.body = util.template("tail-call-body", {
-      AGAIN_ID:      this.getAgainId(),
-      THIS_ID:       this.thisId,
-      ARGUMENTS_ID:  this.argumentsId,
-      FUNCTION_ID:   this.getFunctionId(),
-      BLOCK:         node.body
+      FUNCTION_ID: this.getFunctionId(),
+      AGAIN_ID:    this.getAgainId(),
+      BLOCK:       node.body
     });
 
     var topVars = [];
 
     if (this.needsThis) {
+      for (var path of (this.thisPaths: Array)) {
+        path.replaceWith(this.getThisId());
+      }
+
       topVars.push(t.variableDeclarator(this.getThisId(), t.thisExpression()));
     }
 
     if (this.needsArguments || this.setsArguments) {
-      var decl = t.variableDeclarator(this.getArgumentsId());
-      if (this.needsArguments) {
+      for (let path of (this.argumentsPaths: Array)) {
+        path.replaceWith(this.argumentsId);
+      }
+
+      var decl = t.variableDeclarator(this.argumentsId);
+      if (this.argumentsId) {
         decl.init = t.identifier("arguments");
+        decl.init._shadowedFunctionLiteral = true;
       }
       topVars.push(decl);
     }
@@ -296,7 +292,8 @@ class TailCallTransformer {
   }
 
   subTransformCallExpression(node) {
-    var callee = node.callee, thisBinding, args;
+    var callee = node.callee;
+    var thisBinding, args;
 
     if (t.isMemberExpression(callee, { computed: false }) && t.isIdentifier(callee.property)) {
       switch (callee.property.name) {
@@ -306,6 +303,7 @@ class TailCallTransformer {
 
         case "apply":
           args = node.arguments[1] || t.identifier("undefined");
+          this.needsArguments = true;
           break;
 
         default:
@@ -327,7 +325,7 @@ class TailCallTransformer {
 
     var body = [];
 
-    if (!t.isThisExpression(thisBinding)) {
+    if (this.needsThis && !t.isThisExpression(thisBinding)) {
       body.push(t.expressionStatement(t.assignmentExpression(
         "=",
         this.getThisId(),
@@ -339,30 +337,40 @@ class TailCallTransformer {
       args = t.arrayExpression(node.arguments);
     }
 
+    if (t.isArrayExpression(args) && args.elements.length > this.node.params.length) {
+      this.needsArguments = true;
+    }
+
     var argumentsId = this.getArgumentsId();
-    var params = this.getParams();
+    var params      = this.getParams();
 
-    body.push(t.expressionStatement(t.assignmentExpression(
-      "=",
-      argumentsId,
-      args
-    )));
-
-    var i, param;
+    if (this.needsArguments) {
+      body.push(t.expressionStatement(t.assignmentExpression(
+        "=",
+        argumentsId,
+        args
+      )));
+    }
 
     if (t.isArrayExpression(args)) {
       var elems = args.elements;
-      for (i = 0; i < elems.length && i < params.length; i++) {
-        param = params[i];
-        var elem = elems[i] || (elems[i] = t.identifier("undefined"));
+      for (let i = 0; i < elems.length && i < params.length; i++) {
+        let param = params[i];
+        let elem = elems[i] || (elems[i] = t.identifier("undefined"));
         if (!param._isDefaultPlaceholder) {
           elems[i] = t.assignmentExpression("=", param, elem);
         }
       }
+
+      if (!this.needsArguments) {
+        for (let elem of (elems: Array)) {
+          body.push(t.expressionStatement(elem));
+        }
+      }
     } else {
       this.setsArguments = true;
-      for (i = 0; i < params.length; i++) {
-        param = params[i];
+      for (let i = 0; i < params.length; i++) {
+        let param = params[i];
         if (!param._isDefaultPlaceholder) {
           body.push(t.expressionStatement(t.assignmentExpression(
             "=",
@@ -376,6 +384,7 @@ class TailCallTransformer {
     body.push(t.expressionStatement(
       t.assignmentExpression("=", this.getAgainId(), t.literal(true))
     ));
+
     body.push(t.continueStatement(this.getFunctionId()));
 
     return body;

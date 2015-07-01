@@ -1,37 +1,42 @@
 import * as t from "../../../types";
 
-export function shouldVisit(node) {
-  return node.isType || node.optional || node.implements || node.typeAnnotation || t.isFlow(node);
-}
-
-export function Flow(node) {
-  this.remove();
-}
-
-export function ClassProperty(node) {
-  node.typeAnnotation = null;
-  if (!node.value) this.remove();
-}
-
-export function Class(node) {
-  node.implements = null;
-}
-
-exports.Function = function (node) {
-  for (var i = 0; i < node.params.length; i++) {
-    var param = node.params[i];
-    param.optional = false;
-  }
+export var metadata = {
+  group: "builtin-trailing"
 };
 
-export function TypeCastExpression(node) {
-  return node.expression;
-}
+export var visitor = {
+  Flow() {
+    this.dangerouslyRemove();
+  },
 
-export function ImportDeclaration(node) {
-  if (node.isType) this.remove();
-}
+  ClassProperty(node) {
+    node.typeAnnotation = null;
+    if (!node.value) this.dangerouslyRemove();
+  },
 
-export function ExportDeclaration(node) {
-  if (this.get("declaration").isTypeAlias()) this.remove();
-}
+  Class(node) {
+    node.implements = null;
+  },
+
+  Function(node) {
+    for (var i = 0; i < node.params.length; i++) {
+      var param = node.params[i];
+      param.optional = false;
+    }
+  },
+
+  TypeCastExpression(node) {
+    do {
+      node = node.expression;
+    } while(t.isTypeCastExpression(node));
+    return node;
+  },
+
+  ImportDeclaration(node) {
+    if (node.isType) this.dangerouslyRemove();
+  },
+
+  ExportDeclaration() {
+    if (this.get("declaration").isTypeAlias()) this.dangerouslyRemove();
+  }
+};

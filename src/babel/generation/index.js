@@ -1,5 +1,6 @@
 import detectIndent from "detect-indent";
 import Whitespace from "./whitespace";
+import NodePrinter from "./node/printer";
 import repeating from "repeating";
 import SourceMap from "./source-map";
 import Position from "./position";
@@ -20,7 +21,7 @@ class CodeGenerator {
     this.opts     = opts;
     this.ast      = ast;
 
-    this.whitespace = new Whitespace(this.tokens, this.comments, this.format);
+    this.whitespace = new Whitespace(this.tokens);
     this.position   = new Position;
     this.map        = new SourceMap(this.position, opts, code);
     this.buffer     = new Buffer(this.position, this.format);
@@ -67,7 +68,6 @@ class CodeGenerator {
     for (var i = 0; i < tokens.length; i++) {
       var token = tokens[i];
       if (token.type.label !== "string") continue;
-      if (checked >= 3) continue;
 
       var raw = code.slice(token.start, token.end);
       if (raw[0] === "'") {
@@ -77,6 +77,7 @@ class CodeGenerator {
       }
 
       checked++;
+      if (checked >= 3) break;
     }
 
     if (occurences.single > occurences.double) {
@@ -105,11 +106,13 @@ class CodeGenerator {
 
     this.print(ast);
 
-    var comments = [];
-    each(ast.comments, function (comment) {
-      if (!comment._displayed) comments.push(comment);
-    });
-    this._printComments(comments);
+    if (ast.comments) {
+      var comments = [];
+      for (var comment of (ast.comments: Array)) {
+        if (!comment._displayed) comments.push(comment);
+      }
+      this._printComments(comments);
+    }
 
     return {
       map:  this.map.get(),
@@ -118,40 +121,15 @@ class CodeGenerator {
   }
 
   buildPrint(parent) {
-    var print = (node, opts) => {
-      return this.print(node, parent, opts);
-    };
-
-    print.sequence = (nodes, opts = {}) => {
-      opts.statement = true;
-      return this.printJoin(print, nodes, opts);
-    };
-
-    print.join = (nodes, opts) => {
-      return this.printJoin(print, nodes, opts);
-    };
-
-    print.list = function (items, opts = {}) {
-      if (opts.separator == null) opts.separator = ", ";
-      print.join(items, opts);
-    };
-
-    print.block = (node) => {
-      return this.printBlock(print, node);
-    };
-
-    print.indentOnComments = (node) => {
-      return this.printAndIndentOnComments(print, node);
-    };
-
-    return print;
+    return new NodePrinter(this, parent);
   }
 
-  catchUp(node, parent) {
+  catchUp(node, parent, leftParenPrinted) {
     // catch up to this nodes newline if we're behind
     if (node.loc && this.format.retainLines && this.buffer.buf) {
       var needsParens = false;
-      if (parent && this.position.line < node.loc.start.line && t.isTerminatorless(parent)) {
+      if (!leftParenPrinted && parent &&
+          this.position.line < node.loc.start.line && t.isTerminatorless(parent)) {
         needsParens = true;
         this._push("(");
       }
@@ -161,6 +139,36 @@ class CodeGenerator {
       return needsParens;
     }
     return false;
+  }
+
+  _printNewline(leading, node, parent, opts) {
+    if (!opts.statement && !n.isUserWhitespacable(node, parent)) {
+      return;
+    }
+
+    var lines = 0;
+
+    if (node.start != null && !node._ignoreUserWhitespace) {
+      // user node
+      if (leading) {
+        lines = this.whitespace.getNewlinesBefore(node);
+      } else {
+        lines = this.whitespace.getNewlinesAfter(node);
+      }
+    } else {
+      // generated node
+      if (!leading) lines++; // always include at least a single line after
+      if (opts.addNewlines) lines += opts.addNewlines(leading, node) || 0;
+
+      var needs = n.needsWhitespaceAfter;
+      if (leading) needs = n.needsWhitespaceBefore;
+      if (needs(node, parent)) lines++;
+
+      // generated nodes can't add starting file whitespace
+      if (!this.buffer.buf) lines = 0;
+    }
+
+    this.newline(lines);
   }
 
   print(node, parent, opts = {}) {
@@ -175,36 +183,6 @@ class CodeGenerator {
       this.format.concise = true;
     }
 
-    var newline = (leading) => {
-      if (!opts.statement && !n.isUserWhitespacable(node, parent)) {
-        return;
-      }
-
-      var lines = 0;
-
-      if (node.start != null && !node._ignoreUserWhitespace) {
-        // user node
-        if (leading) {
-          lines = this.whitespace.getNewlinesBefore(node);
-        } else {
-          lines = this.whitespace.getNewlinesAfter(node);
-        }
-      } else {
-        // generated node
-        if (!leading) lines++; // always include at least a single line after
-        if (opts.addNewlines) lines += opts.addNewlines(leading, node) || 0;
-
-        var needs = n.needsWhitespaceAfter;
-        if (leading) needs = n.needsWhitespaceBefore;
-        if (needs(node, parent)) lines++;
-
-        // generated nodes can't add starting file whitespace
-        if (!this.buffer.buf) lines = 0;
-      }
-
-      this.newline(lines);
-    };
-
     if (this[node.type]) {
       var needsNoLineTermParens = n.needsParensNoLineTerminator(node, parent);
       var needsParens           = needsNoLineTermParens || n.needsParens(node, parent);
@@ -214,9 +192,9 @@ class CodeGenerator {
 
       this.printLeadingComments(node, parent);
 
-      var needsParensFromCatchup = this.catchUp(node, parent);
+      var needsParensFromCatchup = this.catchUp(node, parent, needsParens);
 
-      newline(true);
+      this._printNewline(true, node, parent, opts);
 
       if (opts.before) opts.before();
       this.map.mark(node, "start");
@@ -234,7 +212,7 @@ class CodeGenerator {
 
       this.format.concise = oldConcise;
 
-      newline(false);
+      this._printNewline(false, node, parent, opts);
 
       this.printTrailingComments(node, parent);
     } else {
@@ -249,21 +227,24 @@ class CodeGenerator {
 
     if (opts.indent) this.indent();
 
-    each(nodes, (node, i) => {
-      print(node, {
-        statement: opts.statement,
-        addNewlines: opts.addNewlines,
-        after: () => {
-          if (opts.iterator) {
-            opts.iterator(node, i);
-          }
-
-          if (opts.separator && i < len - 1) {
-            this.push(opts.separator);
-          }
+    var printOpts = {
+      statement: opts.statement,
+      addNewlines: opts.addNewlines,
+      after: () => {
+        if (opts.iterator) {
+          opts.iterator(node, i);
         }
-      });
-    });
+
+        if (opts.separator && i < len - 1) {
+          this.push(opts.separator);
+        }
+      }
+    };
+
+    for (var i = 0; i < nodes.length; i++) {
+      var node = nodes[i];
+      print.plain(node, printOpts);
+    }
 
     if (opts.indent) this.dedent();
   }
@@ -271,7 +252,7 @@ class CodeGenerator {
   printAndIndentOnComments(print, node) {
     var indent = !!node.leadingComments;
     if (indent) this.indent();
-    print(node);
+    print.plain(node);
     if (indent) this.dedent();
   }
 
@@ -280,13 +261,13 @@ class CodeGenerator {
       this.semicolon();
     } else {
       this.push(" ");
-      print(node);
+      print.plain(node);
     }
   }
 
   generateComment(comment) {
     var val = comment.value;
-    if (comment.type === "Line") {
+    if (comment.type === "CommentLine") {
       val = `//${val}`;
     } else {
       val = `/*${val}*/`;
@@ -314,9 +295,9 @@ class CodeGenerator {
       nodes.push(node.argument);
     }
 
-    each(nodes, (node) => {
+    for (let node of (nodes: Array)) {
       comments = comments.concat(this._getComments(key, node));
-    });
+    }
 
     return comments;
   }
@@ -327,23 +308,24 @@ class CodeGenerator {
 
   _printComments(comments) {
     if (this.format.compact) return;
-
     if (!this.format.comments) return;
     if (!comments || !comments.length) return;
 
-    each(comments, (comment) => {
+    for (var comment of (comments: Array)) {
       var skip = false;
 
-      // find the original comment in the ast and set it as displayed
-      each(this.ast.comments, function (origComment) {
-        if (origComment.start === comment.start) {
-          // comment has already been output
-          if (origComment._displayed) skip = true;
+      if (this.ast.comments) {
+        // find the original comment in the ast and set it as displayed
+        for (var origComment of (this.ast.comments: Array)) {
+          if (origComment.start === comment.start) {
+            // comment has already been output
+            if (origComment._displayed) skip = true;
 
-          origComment._displayed = true;
-          return false;
+            origComment._displayed = true;
+            break;
+          }
         }
-      });
+      }
 
       if (skip) return;
 
@@ -361,8 +343,8 @@ class CodeGenerator {
       }
 
       //
-      if (comment.type === "Block" && this.format.indent.adjustMultilineComment) {
-        var offset = comment.loc.start.column;
+      if (comment.type === "CommentBlock" && this.format.indent.adjustMultilineComment) {
+        var offset = comment.loc && comment.loc.start.column;
         if (offset) {
           var newlineRegex = new RegExp("\\n\\s{1," + offset + "}", "g");
           val = val.replace(newlineRegex, "\n");
@@ -378,7 +360,7 @@ class CodeGenerator {
 
       // force a newline for line comments when retainLines is set in case the next printed node
       // doesn't catch up
-      if (this.format.retainLines && comment.type === "Line") {
+      if (this.format.retainLines && comment.type === "CommentLine") {
         val += "\n";
       }
 
@@ -387,7 +369,7 @@ class CodeGenerator {
 
       // whitespace after
       this.newline(this.whitespace.getNewlinesAfter(comment));
-    });
+    }
   }
 }
 

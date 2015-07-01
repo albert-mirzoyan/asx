@@ -1,155 +1,205 @@
 import * as messages from "../../../messages";
 import * as t from "../../../types";
 
-export var shouldVisit = t.isPattern;
+export var metadata = {
+  group: "builtin-advanced"
+};
 
-export function ForOfStatement(node, parent, scope, file) {
-  var left = node.left;
+export var visitor = {
+  ForXStatement(node, parent, scope, file) {
+    var left = node.left;
 
-  if (t.isPattern(left)) {
-    // for ({ length: k } in { abc: 3 });
+    if (t.isPattern(left)) {
+      // for ({ length: k } in { abc: 3 });
 
-    var temp = scope.generateUidIdentifier("ref");
+      var temp = scope.generateUidIdentifier("ref");
 
-    node.left = t.variableDeclaration("var", [
-      t.variableDeclarator(temp)
+      node.left = t.variableDeclaration("var", [
+        t.variableDeclarator(temp)
+      ]);
+
+      t.ensureBlock(node);
+
+      node.body.body.unshift(t.variableDeclaration("var", [
+        t.variableDeclarator(left, temp)
+      ]));
+
+      return;
+    }
+
+    if (!t.isVariableDeclaration(left)) return;
+
+    var pattern = left.declarations[0].id;
+    if (!t.isPattern(pattern)) return;
+
+    var key = scope.generateUidIdentifier("ref");
+    node.left = t.variableDeclaration(left.kind, [
+      t.variableDeclarator(key, null)
     ]);
+
+    var nodes = [];
+
+    var destructuring = new DestructuringTransformer({
+      kind: left.kind,
+      file: file,
+      scope: scope,
+      nodes: nodes
+    });
+
+    destructuring.init(pattern, key);
 
     t.ensureBlock(node);
 
-    node.body.body.unshift(t.variableDeclaration("var", [
-      t.variableDeclarator(left, temp)
-    ]));
+    var block = node.body;
+    block.body = nodes.concat(block.body);
+  },
 
-    return;
-  }
+  Function(node, parent, scope, file) {
+    var hasDestructuring = false;
+    for (let pattern of (node.params: Array)) {
+      if (t.isPattern(pattern)) {
+        hasDestructuring = true;
+        break;
+      }
+    }
+    if (!hasDestructuring) return;
 
-  if (!t.isVariableDeclaration(left)) return;
+    var nodes = [];
 
-  var pattern = left.declarations[0].id;
-  if (!t.isPattern(pattern)) return;
+    for (var i = 0; i < node.params.length; i++) {
+      let pattern = node.params[i];
+      if (!t.isPattern(pattern)) continue;
 
-  var key = scope.generateUidIdentifier("ref");
-  node.left = t.variableDeclaration(left.kind, [
-    t.variableDeclarator(key, null)
-  ]);
+      var ref = node.params[i] = scope.generateUidIdentifier("ref");
+      t.inherits(ref, pattern);
 
-  var nodes = [];
+      var destructuring = new DestructuringTransformer({
+        blockHoist: node.params.length - i,
+        nodes:      nodes,
+        scope:      scope,
+        file:       file,
+        kind:       "let"
+      });
 
-  var destructuring = new DestructuringTransformer({
-    kind: left.kind,
-    file: file,
-    scope: scope,
-    nodes: nodes
-  });
+      destructuring.init(pattern, ref);
+    }
 
-  destructuring.init(pattern, key);
+    t.ensureBlock(node);
 
-  t.ensureBlock(node);
+    var block = node.body;
+    block.body = nodes.concat(block.body);
+  },
 
-  var block = node.body;
-  block.body = nodes.concat(block.body);
-}
+  CatchClause(node, parent, scope, file) {
+    var pattern = node.param;
+    if (!t.isPattern(pattern)) return;
 
-export { ForOfStatement as ForInStatement };
-
-exports.Function = function (node, parent, scope, file) {
-  var nodes = [];
-
-  var hasDestructuring = false;
-
-  node.params = node.params.map(function (pattern, i) {
-    if (!t.isPattern(pattern)) return pattern;
-
-    hasDestructuring = true;
     var ref = scope.generateUidIdentifier("ref");
-    t.inherits(ref, pattern);
+    node.param = ref;
+
+    var nodes = [];
 
     var destructuring = new DestructuringTransformer({
-      blockHoist: node.params.length - i,
-      nodes:      nodes,
-      scope:      scope,
-      file:       file,
-      kind:       "let"
+      kind: "let",
+      file: file,
+      scope: scope,
+      nodes: nodes
     });
     destructuring.init(pattern, ref);
 
-    return ref;
-  });
+    node.body.body = nodes.concat(node.body.body);
+  },
 
-  if (!hasDestructuring) return;
+  AssignmentExpression(node, parent, scope, file) {
+    if (!t.isPattern(node.left)) return;
 
-  t.ensureBlock(node);
+    var nodes = [];
 
-  var block = node.body;
-  block.body = nodes.concat(block.body);
-  this.checkSelf();
-};
+    var destructuring = new DestructuringTransformer({
+      operator: node.operator,
+      file: file,
+      scope: scope,
+      nodes: nodes
+    });
 
-export function CatchClause(node, parent, scope, file) {
-  var pattern = node.param;
-  if (!t.isPattern(pattern)) return;
+    var ref;
+    if (this.isCompletionRecord() || !this.parentPath.isExpressionStatement()) {
+      ref = scope.generateUidIdentifierBasedOnNode(node.right, "ref");
 
-  var ref = scope.generateUidIdentifier("ref");
-  node.param = ref;
+      nodes.push(t.variableDeclaration("var", [
+        t.variableDeclarator(ref, node.right)
+      ]));
 
-  var nodes = [];
+      if (t.isArrayExpression(node.right)) {
+        destructuring.arrays[ref.name] = true;
+      }
+    }
 
-  var destructuring = new DestructuringTransformer({
-    kind: "let",
-    file: file,
-    scope: scope,
-    nodes: nodes
-  });
-  destructuring.init(pattern, ref);
+    destructuring.init(node.left, ref || node.right);
 
-  node.body.body = nodes.concat(node.body.body);
+    if (ref) {
+      nodes.push(t.expressionStatement(ref));
+    }
 
-  this.checkSelf();
-}
+    return nodes;
+  },
 
-export function ExpressionStatement(node, parent, scope, file) {
-  var expr = node.expression;
-  if (expr.type !== "AssignmentExpression") return;
-  if (!t.isPattern(expr.left)) return;
-  if (this.isCompletionRecord()) return;
+  VariableDeclaration(node, parent, scope, file) {
+    if (t.isForXStatement(parent)) return;
+    if (!variableDeclarationHasPattern(node)) return;
 
-  var destructuring = new DestructuringTransformer({
-    operator: expr.operator,
-    scope:    scope,
-    file:     file,
-  });
+    var nodes = [];
+    var declar;
 
-  return destructuring.init(expr.left, expr.right);
-}
+    for (var i = 0; i < node.declarations.length; i++) {
+      declar = node.declarations[i];
 
-export function AssignmentExpression(node, parent, scope, file) {
-  if (!t.isPattern(node.left)) return;
+      var patternId = declar.init;
+      var pattern   = declar.id;
 
-  var ref = scope.generateUidIdentifier("temp");
+      var destructuring = new DestructuringTransformer({
+        nodes: nodes,
+        scope: scope,
+        kind:  node.kind,
+        file:  file
+      });
 
-  var nodes = [];
-  nodes.push(t.variableDeclaration("var", [
-    t.variableDeclarator(ref, node.right)
-  ]));
+      if (t.isPattern(pattern)) {
+        destructuring.init(pattern, patternId);
 
-  var destructuring = new DestructuringTransformer({
-    operator: node.operator,
-    file: file,
-    scope: scope,
-    nodes: nodes
-  });
+        if (+i !== node.declarations.length - 1) {
+          // we aren't the last declarator so let's just make the
+          // last transformed node inherit from us
+          t.inherits(nodes[nodes.length - 1], declar);
+        }
+      } else {
+        nodes.push(t.inherits(destructuring.buildVariableAssignment(declar.id, declar.init), declar));
+      }
+    }
 
-  if (t.isArrayExpression(node.right)) {
-    destructuring.arrays[ref.name] = true;
+    if (!t.isProgram(parent) && !t.isBlockStatement(parent)) {
+      // https://github.com/babel/babel/issues/113
+      // for (let [x] = [0]; false;) {}
+
+      declar = null;
+
+      for (i = 0; i < nodes.length; i++) {
+        node = nodes[i];
+        declar = declar || t.variableDeclaration(node.kind, []);
+
+        if (!t.isVariableDeclaration(node) && declar.kind !== node.kind) {
+          throw file.errorWithNode(node, messages.get("invalidParentForThisNode"));
+        }
+
+        declar.declarations = declar.declarations.concat(node.declarations);
+      }
+
+      return declar;
+    }
+
+    return nodes;
   }
-
-  destructuring.init(node.left, ref);
-
-  nodes.push(t.expressionStatement(ref));
-
-  return nodes;
-}
+};
 
 function variableDeclarationHasPattern(node) {
   for (var i = 0; i < node.declarations.length; i++) {
@@ -158,62 +208,6 @@ function variableDeclarationHasPattern(node) {
     }
   }
   return false;
-}
-
-export function VariableDeclaration(node, parent, scope, file) {
-  if (t.isForInStatement(parent) || t.isForOfStatement(parent)) return;
-  if (!variableDeclarationHasPattern(node)) return;
-
-  var nodes = [];
-  var declar;
-
-  for (var i = 0; i < node.declarations.length; i++) {
-    declar = node.declarations[i];
-
-    var patternId = declar.init;
-    var pattern   = declar.id;
-
-    var destructuring = new DestructuringTransformer({
-      nodes: nodes,
-      scope: scope,
-      kind:  node.kind,
-      file:  file
-    });
-
-    if (t.isPattern(pattern) && patternId) {
-      destructuring.init(pattern, patternId);
-
-      if (+i !== node.declarations.length - 1) {
-        // we aren't the last declarator so let's just make the
-        // last transformed node inherit from us
-        t.inherits(nodes[nodes.length - 1], declar);
-      }
-    } else {
-      nodes.push(t.inherits(destructuring.buildVariableAssignment(declar.id, declar.init), declar));
-    }
-  }
-
-  if (!t.isProgram(parent) && !t.isBlockStatement(parent)) {
-    // https://github.com/babel/babel/issues/113
-    // for (let [x] = [0]; false;) {}
-
-    declar = null;
-
-    for (i = 0; i < nodes.length; i++) {
-      node = nodes[i];
-      declar = declar || t.variableDeclaration(node.kind, []);
-
-      if (!t.isVariableDeclaration(node) && declar.kind !== node.kind) {
-        throw file.errorWithNode(node, messages.get("invalidParentForThisNode"));
-      }
-
-      declar.declarations = declar.declarations.concat(node.declarations);
-    }
-
-    return declar;
-  }
-
-  return nodes;
 }
 
 function hasRest(pattern) {
@@ -226,8 +220,8 @@ function hasRest(pattern) {
 }
 
 var arrayUnpackVisitor = {
-  enter(node, parent, scope, state) {
-    if (this.isReferencedIdentifier() && state.bindings[node.name]) {
+  ReferencedIdentifier(node, parent, scope, state) {
+    if (state.bindings[node.name]) {
       state.deopt = true;
       this.stop();
     }
@@ -296,7 +290,7 @@ class DestructuringTransformer {
     // we need to assign the current value of the assignment to avoid evaluating
     // it more than once
 
-    var tempValueRef = this.scope.generateUidBasedOnNode(valueRef);
+    var tempValueRef = this.scope.generateUidIdentifierBasedOnNode(valueRef);
 
     var declar = t.variableDeclaration("var", [
       t.variableDeclarator(tempValueRef, valueRef)
@@ -378,7 +372,7 @@ class DestructuringTransformer {
     // only evaluated once
 
     if (pattern.properties.length > 1 && t.isMemberExpression(objRef)) {
-      var temp = this.scope.generateUidBasedOnNode(objRef, this.file);
+      var temp = this.scope.generateUidIdentifierBasedOnNode(objRef, this.file);
       this.nodes.push(this.buildVariableDeclaration(temp, objRef));
       objRef = temp;
     }
@@ -462,7 +456,7 @@ class DestructuringTransformer {
       // array
       arrayRef = toArray;
     } else {
-      arrayRef = this.scope.generateUidBasedOnNode(arrayRef);
+      arrayRef = this.scope.generateUidIdentifierBasedOnNode(arrayRef);
       this.arrays[arrayRef.name] = true;
       this.nodes.push(this.buildVariableDeclaration(arrayRef, toArray));
     }
@@ -499,9 +493,8 @@ class DestructuringTransformer {
     // trying to destructure a value that we can't evaluate more than once so we
     // need to save it to a variable
 
-    var shouldMemoise = true;
     if (!t.isArrayExpression(ref) && !t.isMemberExpression(ref)) {
-      var memo = this.scope.generateMemoisedReference(ref, true);
+      var memo = this.scope.maybeGenerateMemoised(ref, true);
       if (memo) {
         this.nodes.push(this.buildVariableDeclaration(memo, ref));
         ref = memo;

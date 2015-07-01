@@ -1,5 +1,5 @@
 export function File(node, print) {
-  print(node.program);
+  print.plain(node.program);
 }
 
 export function Program(node, print) {
@@ -16,4 +16,8 @@ export function BlockStatement(node, print) {
     if (!this.format.retainLines) this.removeLast("\n");
     this.rightBrace();
   }
+}
+
+export function Noop() {
+
 }

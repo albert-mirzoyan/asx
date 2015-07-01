@@ -1,26 +1,34 @@
-import * as messages from "../../../messages";
 import * as t from "../../../types";
 
-export function Program(program, parent, scope, file) {
-  var first = program.body[0];
-  if (t.isExpressionStatement(first) && t.isLiteral(first.expression, { value: "use strict" })) {
-    file.set("existingStrictDirective", program.body.shift());
+export var metadata = {
+  group: "builtin-pre"
+};
+
+const THIS_BREAK_KEYS = ["FunctionExpression", "FunctionDeclaration", "ClassExpression", "ClassDeclaration"];
+
+export var visitor = {
+  Program: {
+    enter(program) {
+      var first = program.body[0];
+
+      var directive;
+      if (t.isExpressionStatement(first) && t.isLiteral(first.expression, { value: "use strict" })) {
+        directive = first;
+      } else {
+        directive = t.expressionStatement(t.literal("use strict"));
+        this.unshiftContainer("body", directive);
+        if (first) {
+          directive.leadingComments = first.leadingComments;
+          first.leadingComments = [];
+        }
+      }
+      directive._blockHoist = Infinity;
+    }
+  },
+
+  ThisExpression() {
+    if (!this.findParent((path) => !path.is("shadow") && THIS_BREAK_KEYS.indexOf(path.type) >= 0)) {
+      return t.identifier("undefined");
+    }
   }
-}
-
-export function FunctionExpression() {
-  this.skip();
-}
-
-export { FunctionExpression as FunctionDeclaration };
-export { FunctionExpression as Class };
-
-export function ThisExpression() {
-  return t.identifier("undefined");
-}
-
-export function CallExpression(node, parent, scope, file) {
-  if (t.isIdentifier(node.callee, { name: "eval" })) {
-    throw file.errorWithNode(node, messages.get("evalInStrictMode"));
-  }
-}
+};

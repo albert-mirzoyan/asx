@@ -1,6 +1,19 @@
-import isString from "lodash/lang/isString";
+import { getBindingIdentifiers } from "./retrievers";
 import esutils from "esutils";
 import * as t from "./index";
+
+/**
+ *
+ */
+
+export function isBinding(node: Object, parent: Object): boolean {
+  var bindingKey = getBindingIdentifiers.keys[parent.type];
+  if (bindingKey) {
+    return parent[bindingKey] === node;
+  } else {
+    return false;
+  }
+}
 
 /**
  * Check if the input `node` is a reference to a bound variable.
@@ -12,6 +25,7 @@ export function isReferenced(node: Object, parent: Object): boolean {
     // yes: NODE.child
     // no: parent.CHILD
     case "MemberExpression":
+    case "JSXMemberExpression":
       if (parent.property === node && parent.computed) {
         return true;
       } else if (parent.object === node) {
@@ -30,7 +44,7 @@ export function isReferenced(node: Object, parent: Object): boolean {
     // no: { NODE: "" }
     case "Property":
       if (parent.key === node) {
-        return parent.computed || parent.shorthand;
+        return parent.computed;
       }
 
     // no: var NODE = init;
@@ -50,12 +64,32 @@ export function isReferenced(node: Object, parent: Object): boolean {
       return parent.id !== node;
 
     // no: export { foo as NODE };
+    // yes: export { NODE as foo };
+    // no: export { NODE as foo } from "foo";
     case "ExportSpecifier":
-      return parent.exported !== node;
+      if (parent.source) {
+        return false;
+      } else {
+        return parent.local === node;
+      }
+
+    // no: import NODE from "foo";
+    case "ImportDefaultSpecifier":
+      return false;
+
+    // no: import * as NODE from "foo";
+    case "ImportNamespaceSpecifier":
+      return false;
+
+    // no: <div NODE="foo" />
+    case "JSXAttribute":
+      return parent.name !== node;
 
     // no: import { NODE as foo } from "foo";
+    // no: import { foo as NODE } from "foo";
+    // no: import NODE from "bar";
     case "ImportSpecifier":
-      return parent.imported !== node;
+      return false;
 
     // no: class NODE {}
     case "ClassDeclaration":
@@ -80,6 +114,7 @@ export function isReferenced(node: Object, parent: Object): boolean {
 
     // no: [NODE = foo] = [];
     // yes: [foo = NODE] = [];
+    case "AssignmentExpression":
     case "AssignmentPattern":
       return parent.right === node;
 
@@ -88,25 +123,9 @@ export function isReferenced(node: Object, parent: Object): boolean {
     case "ObjectPattern":
     case "ArrayPattern":
       return false;
-
-    // no: import NODE from "bar";
-    case "ImportSpecifier":
-      return false;
-
-    // no: import * as NODE from "foo";
-    case "ImportNamespaceSpecifier":
-      return false;
   }
 
   return true;
-}
-
-/**
- * Check if the input `node` is an `Identifier` and `isReferenced`.
- */
-
-export function isReferencedIdentifier(node: Object, parent: Object, opts?: Object): boolean {
-  return (t.isIdentifier(node, opts) || t.isJSXIdentifier(node, opts)) && t.isReferenced(node, parent);
 }
 
 /**
@@ -115,8 +134,11 @@ export function isReferencedIdentifier(node: Object, parent: Object, opts?: Obje
  */
 
 export function isValidIdentifier(name: string): boolean {
-  if (!isString(name) || esutils.keyword.isReservedWordES6(name, true)) return false;
-  return esutils.keyword.isIdentifierNameES6(name);
+  if (typeof name !== "string" || esutils.keyword.isReservedWordES6(name, true)) {
+    return false;
+  } else {
+    return esutils.keyword.isIdentifierNameES6(name);
+  }
 }
 
 /**
@@ -149,7 +171,6 @@ export function isVar(node: Object): boolean {
 
 export function isSpecifierDefault(specifier: Object): boolean {
   return t.isImportDefaultSpecifier(specifier) ||
-         t.isExportDefaultSpecifier(specifier) ||
          t.isIdentifier(specifier.imported || specifier.exported, { name: "default" });
 }
 

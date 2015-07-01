@@ -9,7 +9,7 @@ export var metadata = {
 
 var MATH_POW = t.memberExpression(t.identifier("Math"), t.identifier("pow"));
 
-build(exports, {
+export var visitor = build({
   operator: "**",
 
   build(left, right) {

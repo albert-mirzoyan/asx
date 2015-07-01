@@ -1,4 +1,7 @@
-import each from "lodash/collection/each";
+/* eslint quotes: 0 */
+
+import isInteger from "is-integer";
+import * as t from "../../types";
 
 export function Identifier(node) {
   this.push(node.name);
@@ -6,7 +9,7 @@ export function Identifier(node) {
 
 export function RestElement(node, print) {
   this.push("...");
-  print(node.argument);
+  print.plain(node.argument);
 }
 
 export { RestElement as SpreadElement, RestElement as SpreadProperty };
@@ -35,16 +38,29 @@ export function Property(node, print) {
   } else {
     if (node.computed) {
       this.push("[");
-      print(node.key);
+      print.plain(node.key);
       this.push("]");
     } else {
-      print(node.key);
-      if (node.shorthand) return;
+      // print `({ foo: foo = 5 } = {})` as `({ foo = 5 } = {});`
+      if (t.isAssignmentPattern(node.value) && t.isIdentifier(node.key) && node.key.name === node.value.left.name) {
+        print.plain(node.value);
+        return;
+      }
+
+      print.plain(node.key);
+
+      // shorthand!
+      if (node.shorthand &&
+        (t.isIdentifier(node.key) &&
+         t.isIdentifier(node.value) &&
+         node.key.name === node.value.name)) {
+        return;
+      }
     }
 
     this.push(":");
     this.space();
-    print(node.value);
+    print.plain(node.value);
   }
 }
 
@@ -54,7 +70,8 @@ export function ArrayExpression(node, print) {
 
   this.push("[");
 
-  each(elems, (elem, i) => {
+  for (var i = 0; i < elems.length; i++) {
+    var elem = elems[i];
     if (!elem) {
       // If the array expression ends with a hole, that hole
       // will be ignored by the interpreter, but if it ends with
@@ -64,24 +81,39 @@ export function ArrayExpression(node, print) {
       this.push(",");
     } else {
       if (i > 0) this.push(" ");
-      print(elem);
+      print.plain(elem);
       if (i < len - 1) this.push(",");
     }
-  });
+  }
 
   this.push("]");
 }
 
 export { ArrayExpression as ArrayPattern };
 
-export function Literal(node) {
+const SCIENTIFIC_NOTATION = /e/i;
+
+export function Literal(node, print, parent) {
   var val  = node.value;
   var type = typeof val;
 
   if (type === "string") {
     this._stringLiteral(val);
   } else if (type === "number") {
-    this.push(val + "");
+    // check to see if this is the same number as the raw one in the original source as asm.js uses
+    // numbers in the form 5.0 for type hinting
+    var raw = node.raw;
+    if (val === +raw && raw[raw.length - 1] !== "." && !/^0[bo]/i.test(raw)) {
+      val = raw;
+    }
+
+    val = val + "";
+
+    if (isInteger(+val) && t.isMemberExpression(parent, { object: node }) && !SCIENTIFIC_NOTATION.test(val)) {
+      val += ".";
+    }
+
+    this.push(val);
   } else if (type === "boolean") {
     this.push(val ? "true" : "false");
   } else if (node.regex) {
@@ -100,9 +132,16 @@ export function _stringLiteral(val) {
   });
 
   if (this.format.quotes === "single") {
+    // remove double quotes
     val = val.slice(1, -1);
+
+    // unescape double quotes
     val = val.replace(/\\"/g, '"');
+
+    // escape single quotes
     val = val.replace(/'/g, "\\'");
+
+    // add single quotes
     val = `'${val}'`;
   }
 

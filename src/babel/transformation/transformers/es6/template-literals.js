@@ -1,64 +1,89 @@
+/* eslint no-unused-vars: 0 */
+
 import * as t from "../../../types";
 
-var buildBinaryExpression = function (left, right) {
-  return t.binaryExpression("+", left, right);
+export var metadata = {
+  group: "builtin-pre"
 };
 
-export function shouldVisit(node) {
-  return t.isTemplateLiteral(node) || t.isTaggedTemplateExpression(node);
+function isString(node) {
+  return t.isLiteral(node) && typeof node.value === "string";
 }
 
-export function TaggedTemplateExpression(node, parent, scope, file) {
-  var quasi = node.quasi;
-  var args  = [];
-
-  var strings = [];
-  var raw     = [];
-
-  for (var i = 0; i < quasi.quasis.length; i++) {
-    var elem = quasi.quasis[i];
-    strings.push(t.literal(elem.value.cooked));
-    raw.push(t.literal(elem.value.raw));
-  }
-
-  strings = t.arrayExpression(strings);
-  raw = t.arrayExpression(raw);
-
-  var templateName = "tagged-template-literal";
-  if (file.isLoose("es6.templateLiterals")) templateName += "-loose";
-  args.push(t.callExpression(file.addHelper(templateName), [strings, raw]));
-
-  args = args.concat(quasi.expressions);
-
-  return t.callExpression(node.tag, args);
+function buildBinaryExpression(left, right) {
+  var node = t.binaryExpression("+", left, right);
+  node._templateLiteralProduced = true;
+  return node;
 }
 
-export function TemplateLiteral(node, parent, scope, file) {
-  var nodes = [];
-  var i;
-
-  for (i = 0; i < node.quasis.length; i++) {
-    var elem = node.quasis[i];
-
-    nodes.push(t.literal(elem.value.cooked));
-
-    var expr = node.expressions.shift();
-    if (expr) nodes.push(expr);
+function crawl(path) {
+  if (path.is("_templateLiteralProduced")) {
+    crawl(path.get("left"));
+    crawl(path.get("right"));
+  } else if (!path.isBaseType("string") && !path.isBaseType("number")) {
+    path.replaceWith(t.callExpression(t.identifier("String"), [path.node]));
   }
+}
 
-  if (nodes.length > 1) {
-    // remove redundant '' at the end of the expression
-    var last = nodes[nodes.length - 1];
-    if (t.isLiteral(last, { value: "" })) nodes.pop();
+export var visitor = {
+  TaggedTemplateExpression(node, parent, scope, file) {
+    var quasi = node.quasi;
+    var args  = [];
 
-    var root = buildBinaryExpression(nodes.shift(), nodes.shift());
+    var strings = [];
+    var raw     = [];
 
-    for (i = 0; i < nodes.length; i++) {
-      root = buildBinaryExpression(root, nodes[i]);
+    for (var elem of (quasi.quasis: Array)) {
+      strings.push(t.literal(elem.value.cooked));
+      raw.push(t.literal(elem.value.raw));
     }
 
-    return root;
-  } else {
-    return nodes[0];
+    strings = t.arrayExpression(strings);
+    raw = t.arrayExpression(raw);
+
+    var templateName = "tagged-template-literal";
+    if (file.isLoose("es6.templateLiterals")) templateName += "-loose";
+    args.push(t.callExpression(file.addHelper(templateName), [strings, raw]));
+
+    args = args.concat(quasi.expressions);
+
+    return t.callExpression(node.tag, args);
+  },
+
+  TemplateLiteral(node, parent, scope, file) {
+    var nodes = [];
+
+    for (let elem of (node.quasis: Array)) {
+      nodes.push(t.literal(elem.value.cooked));
+
+      var expr = node.expressions.shift();
+      if (expr) nodes.push(expr);
+    }
+
+    if (nodes.length > 1) {
+      // filter out empty string literals
+      nodes = nodes.filter(n => !t.isLiteral(n, { value: "" }));
+
+      if (nodes.length === 1 && isString(nodes[0])) {
+        return nodes[0];
+      }
+
+      // since `+` is left-to-right associative
+      // ensure the first node is a string if first/second isn't
+      if (!isString(nodes[0]) && !isString(nodes[1])) {
+        nodes.unshift(t.literal(""));
+      }
+
+      var root = buildBinaryExpression(nodes.shift(), nodes.shift());
+
+      for (let node of (nodes: Array)) {
+        root = buildBinaryExpression(root, node);
+      }
+
+      this.replaceWith(root);
+      //crawl(this);
+    } else {
+      return nodes[0];
+    }
   }
-}
+};

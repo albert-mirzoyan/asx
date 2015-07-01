@@ -1,5 +1,19 @@
-import * as node from  "../../api/node";
+import Transformer from "../transformer";
+import Plugin from "../plugin";
+import * as types from "../../types";
 import * as messages from "../../messages";
+import traverse from "../../types";
+import parse from "../../helpers/parse";
+
+var context = {
+  messages,
+  Transformer,
+  Plugin,
+  types,
+  parse,
+  traverse
+};
+
 import * as util from  "../../util";
 
 export default class PluginManager {
@@ -11,7 +25,7 @@ export default class PluginManager {
       if (plugin.container === fn) return plugin.transformer;
     }
 
-    var transformer = fn(node);
+    var transformer = fn(context);
     PluginManager.memoisedPlugins.push({
       container: fn,
       transformer: transformer
@@ -35,11 +49,12 @@ export default class PluginManager {
     var match = name.match(/^(.*?):(after|before)$/);
     if (match) [, name, position] = match;
 
-    var loc = util.resolveRelative(name) || util.resolveRelative(`babel-plugin-${name}`);
+    var loc = util.resolveRelative(`babel-plugin-${name}`) || util.resolveRelative(name);
     if (loc) {
+      var plugin = require(loc);
       return {
         position: position,
-        plugin:   require(loc)
+        plugin:   plugin.default || plugin
       };
     } else {
       throw new ReferenceError(messages.get("pluginUnknown", name));
@@ -54,7 +69,7 @@ export default class PluginManager {
     }
 
     // validate Transformer instance
-    if (!plugin.buildPass || plugin.constructor.name !== "Transformer") {
+    if (!plugin.buildPass || plugin.constructor.name !== "Plugin") {
       throw new TypeError(messages.get("pluginNotTransformer", name));
     }
 
@@ -68,7 +83,7 @@ export default class PluginManager {
 
     if (name) {
       if (typeof name === "object" && name.transformer) {
-        ({ plugin: name, position } = name);
+        ({ transformer: plugin, position } = name);
       } else if (typeof name !== "string") {
         // not a string so we'll just assume that it's a direct Transformer instance, if not then
         // the checks later on will complain

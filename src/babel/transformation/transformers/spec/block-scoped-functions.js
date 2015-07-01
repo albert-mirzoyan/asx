@@ -1,10 +1,10 @@
 import * as t from "../../../types";
 
-function statementList(key, path, file) {
+function statementList(key, path) {
   var paths = path.get(key);
 
   for (var i = 0; i < paths.length; i++) {
-    var path = paths[i];
+    let path = paths[i];
 
     var func = path.node;
     if (!t.isFunctionDeclaration(func)) continue;
@@ -23,29 +23,16 @@ function statementList(key, path, file) {
   }
 }
 
-export function shouldVisit(node) {
-  var body;
-  if (node.type === "SwitchCase") {
-    body = node.consequent;
-  } else if (node.type === "BlockStatement") {
-    body = node.body;
-  }
-  if (body) {
-    for (var i = 0; i < body.length; i++) {
-      if (body[i].type === "FunctionDeclaration") return true;
+export var visitor = {
+  BlockStatement(node, parent) {
+    if ((t.isFunction(parent) && parent.body === node) || t.isExportDeclaration(parent)) {
+      return;
     }
+
+    statementList("body", this);
+  },
+
+  SwitchCase() {
+    statementList("consequent", this);
   }
-  return false;
-}
-
-export function BlockStatement(node, parent, scope, file) {
-  if ((t.isFunction(parent) && parent.body === node) || t.isExportDeclaration(parent)) {
-    return;
-  }
-
-  statementList("body", this, file);
-}
-
-export function SwitchCase(node, parent, scope, file) {
-  statementList("consequent", this, file);
-}
+};

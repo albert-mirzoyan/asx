@@ -1,21 +1,39 @@
-import * as virtualTypes from "./path/virtual-types";
+import * as virtualTypes from "./path/lib/virtual-types";
 import * as messages from "../messages";
 import * as t from "../types";
-import esquery from "esquery";
+import clone from "lodash/lang/clone";
 
-export function explode(visitor, mergeConflicts) {
+export function explode(visitor) {
+  if (visitor._exploded) return visitor;
+  visitor._exploded = true;
+
+  // normalise pipes
+  for (let nodeType in visitor) {
+    if (shouldIgnoreKey(nodeType)) continue;
+
+    let parts = nodeType.split("|");
+    if (parts.length === 1) continue;
+
+    let fns = visitor[nodeType];
+    delete visitor[nodeType];
+
+    for (let part of (parts: Array)) {
+      visitor[part] = fns;
+    }
+  }
+
+  // verify data structure
+  verify(visitor);
+
   // make sure there's no __esModule type since this is because we're using loose mode
   // and it sets __esModule to be enumerable on all modules :(
   delete visitor.__esModule;
 
-  if (visitor.queries) {
-    ensureEntranceObjects(visitor.queries);
-    addQueries(visitor);
-    delete visitor.queries;
-  }
-
   // ensure visitors are objects
   ensureEntranceObjects(visitor);
+
+  // ensure enter/exit callbacks are arrays
+  ensureCallbackArrays(visitor);
 
   // add type wrappers
   for (let nodeType in visitor) {
@@ -25,23 +43,25 @@ export function explode(visitor, mergeConflicts) {
     if (!wrapper) continue;
 
     // wrap all the functions
-    var fns = visitor[nodeType];
-    for (var type in fns) {
+    let fns = visitor[nodeType];
+    for (let type in fns) {
       fns[type] = wrapCheck(wrapper, fns[type]);
     }
 
     // clear it from the visitor
     delete visitor[nodeType];
 
-    if (wrapper.type) {
-      // merge the visitor if necessary or just put it back in
-      if (visitor[wrapper.type]) {
-        merge(visitor[wrapper.type], fns);
-      } else {
-        visitor[wrapper.type] = fns;
+    if (wrapper.types) {
+      for (let type of (wrapper.types: Array)) {
+        // merge the visitor if necessary or just put it back in
+        if (visitor[type]) {
+          mergePair(visitor[type], fns);
+        } else {
+          visitor[type] = fns;
+        }
       }
     } else {
-      merge(visitor, fns);
+      mergePair(visitor, fns);
     }
   }
 
@@ -49,24 +69,28 @@ export function explode(visitor, mergeConflicts) {
   for (let nodeType in visitor) {
     if (shouldIgnoreKey(nodeType)) continue;
 
-    var fns = visitor[nodeType];
+    let fns = visitor[nodeType];
 
     var aliases = t.FLIPPED_ALIAS_KEYS[nodeType];
     if (!aliases) continue;
 
-    // clear it form the visitor
+    // clear it from the visitor
     delete visitor[nodeType];
 
     for (var alias of (aliases: Array)) {
       var existing = visitor[alias];
       if (existing) {
-        if (mergeConflicts) {
-          merge(existing, fns);
-        }
+        mergePair(existing, fns);
       } else {
-        visitor[alias] = fns;
+        visitor[alias] = clone(fns);
       }
     }
+  }
+
+  for (let nodeType in visitor) {
+    if (shouldIgnoreKey(nodeType)) continue;
+
+    ensureCallbackArrays(visitor[nodeType]);
   }
 
   return visitor;
@@ -79,22 +103,15 @@ export function verify(visitor) {
     throw new Error(messages.get("traverseVerifyRootFunction"));
   }
 
-  if (!visitor.enter) visitor.enter = function () { };
-  if (!visitor.exit) visitor.exit = function () { };
-  if (!visitor.shouldSkip) visitor.shouldSkip = function () { return false; };
-
   for (var nodeType in visitor) {
     if (shouldIgnoreKey(nodeType)) continue;
 
-    if (t.TYPES.indexOf(nodeType) < 0) {
+    if (t.TYPES.indexOf(nodeType) < 0 && !virtualTypes[nodeType]) {
       throw new Error(messages.get("traverseVerifyNodeType", nodeType));
     }
 
     var visitors = visitor[nodeType];
-
-    if (typeof visitors === "function") {
-      throw new Error(messages.get("traverseVerifyVisitorFunction", nodeType));
-    } else if (typeof visitors === "object") {
+    if (typeof visitors === "object") {
       for (var visitorKey in visitors) {
         if (visitorKey === "enter" || visitorKey === "exit") continue;
         throw new Error(messages.get("traverseVerifyVisitorProperty", nodeType, visitorKey));
@@ -103,6 +120,19 @@ export function verify(visitor) {
   }
 
   visitor._verified = true;
+}
+
+export function merge(visitors) {
+  var rootVisitor = {};
+
+  for (var visitor of (visitors: Array)) {
+    for (var type in visitor) {
+      var nodeVisitor = rootVisitor[type] = rootVisitor[type] || {};
+      mergePair(nodeVisitor, visitor[type]);
+    }
+  }
+
+  return rootVisitor;
 }
 
 function ensureEntranceObjects(obj) {
@@ -116,26 +146,9 @@ function ensureEntranceObjects(obj) {
   }
 }
 
-function addQueries(visitor) {
-  for (var selector in visitor.queries) {
-    var fns = visitor.queries[selector];
-    addSelector(visitor, selector, fns);
-  }
-}
-
-function addSelector(visitor, selector, fns) {
-  selector = esquery.parse(selector);
-
-  for (var key in fns) {
-    let fn = fns[key];
-    fns[key] = function (node) {
-      if (esquery.matches(node, selector, this.getAncestry())) {
-        return fn.apply(this, arguments);
-      }
-    };
-  }
-
-  merge(visitor, fns);
+function ensureCallbackArrays(obj){
+  if (obj.enter && !Array.isArray(obj.enter)) obj.enter = [obj.enter];
+  if (obj.exit && !Array.isArray(obj.exit)) obj.exit = [obj.exit];
 }
 
 function wrapCheck(wrapper, fn) {
@@ -154,13 +167,13 @@ function shouldIgnoreKey(key) {
   if (key === "enter" || key === "exit" || key === "shouldSkip") return true;
 
   // ignore other options
-  if (key === "blacklist" || key === "noScope") return true;
+  if (key === "blacklist" || key === "noScope" || key === "skipKeys") return true;
 
   return false;
 }
 
-function merge(dest, src) {
+function mergePair(dest, src) {
   for (var key in src) {
-    dest[key] = (dest[key] || []).concat(src[key]);
+    dest[key] = [].concat(dest[key] || [], src[key]);
   }
 }

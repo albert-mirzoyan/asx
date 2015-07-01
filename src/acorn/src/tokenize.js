@@ -283,7 +283,7 @@ pp.readToken_lt_gt = function(code) { // '<>'
   }
   if (next == 33 && code == 60 && this.input.charCodeAt(this.pos + 2) == 45 &&
       this.input.charCodeAt(this.pos + 3) == 45) {
-    if (this.inModule) unexpected()
+    if (this.inModule) this.unexpected()
     // `<!--`, an XML-style comment that should be interpreted as a line comment
     this.skipLineComment(4)
     this.skipSpace()
@@ -320,7 +320,13 @@ pp.getTokenFromCode = function(code) {
   case 93: ++this.pos; return this.finishToken(tt.bracketR)
   case 123: ++this.pos; return this.finishToken(tt.braceL)
   case 125: ++this.pos; return this.finishToken(tt.braceR)
-  case 58: ++this.pos; return this.finishToken(tt.colon)
+
+  case 58:
+    if (this.options.features["es7.functionBind"] && this.input.charCodeAt(this.pos + 1) === 58)
+      return this.finishOp(tt.doubleColon, 2)
+    ++this.pos
+    return this.finishToken(tt.colon)
+
   case 63: ++this.pos; return this.finishToken(tt.question)
   case 64: ++this.pos; return this.finishToken(tt.at)
 
@@ -571,11 +577,15 @@ pp.readTmplToken = function() {
     } else if (isNewLine(ch)) {
       out += this.input.slice(chunkStart, this.pos)
       ++this.pos
-      if (ch === 13 && this.input.charCodeAt(this.pos) === 10) {
-        ++this.pos
-        out += "\n"
-      } else {
-        out += String.fromCharCode(ch)
+      switch (ch) {
+        case 13:
+          if (this.input.charCodeAt(this.pos) === 10) ++this.pos;
+        case 10:
+          out += "\n";
+          break;
+        default:
+          out += String.fromCharCode(ch);
+          break;
       }
       if (this.options.locations) {
         ++this.curLine

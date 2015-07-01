@@ -17,6 +17,8 @@ var or  = types.Type.or;
 //  .build("program")
 //  .field("program", def("Program"));
 
+def("Noop");
+
 def("AssignmentPattern")
   .bases("Pattern")
   .build("left", "right")
@@ -32,6 +34,9 @@ def("DoExpression")
   .bases("Expression")
   .build("body")
   .field("body", [def("Statement")]);
+
+def("Super")
+  .bases("Expression");
 
 def("ExportDefaultDeclaration")
   .bases("Declaration")
@@ -68,5 +73,11 @@ def("ExportAllDeclaration")
   .build("exported", "source")
   .field("exported", def("Identifier"))
   .field("source", def("Literal"));
+
+def("BindExpression")
+  .bases("Expression")
+  .build("object", "callee")
+  .field("object", or(def("Expression"), null))
+  .field("callee", def("Expression"));
 
 types.finalize();

@@ -1,3 +1,4 @@
+import type NodePath from "../../traversal/path";
 import * as messages from "../../messages";
 import * as t from "../../types";
 
@@ -34,7 +35,7 @@ var visitor = {
       // not in the top level so we need to create a reference
       self.getThisReference.bind(self);
 
-    var callback = self.looseHandle;
+    var callback = self.specHandle;
     if (self.isLoose) callback = self.looseHandle;
     var result = callback.call(self, this, getThisReference);
     if (result) this.hasSuper = true;
@@ -49,7 +50,7 @@ export default class ReplaceSupers {
    * Description
    */
 
-  constructor(opts: Object, inClass: boolean = false) {
+  constructor(opts: Object, inClass?: boolean = false) {
     this.topLevelThisReference = opts.topLevelThisReference;
     this.methodPath            = opts.methodPath;
     this.methodNode            = opts.methodNode;
@@ -67,6 +68,56 @@ export default class ReplaceSupers {
     return this.opts.objectRef || this.opts.getObjectRef();
   }
 
+  /**
+   * Sets a super class value of the named property.
+   *
+   * @example
+   *
+   *   _set(Object.getPrototypeOf(CLASS.prototype), "METHOD", "VALUE", this)
+   *
+   */
+
+  setSuperProperty(property: Object, value: Object, isComputed: boolean, thisExpression: Object): Object {
+    return t.callExpression(
+      this.file.addHelper("set"),
+      [
+        t.callExpression(
+          t.memberExpression(t.identifier("Object"), t.identifier("getPrototypeOf")),
+          [
+            this.isStatic ? this.getObjectRef() : t.memberExpression(this.getObjectRef(), t.identifier("prototype"))
+          ]
+        ),
+        isComputed ? property : t.literal(property.name),
+        value,
+        thisExpression
+      ]
+    );
+  }
+
+  /**
+   * Gets a node representing the super class value of the named property.
+   *
+   * @example
+   *
+   *   _get(Object.getPrototypeOf(CLASS.prototype), "METHOD", this)
+   *
+   */
+
+  getSuperProperty(property: Object, isComputed: boolean, thisExpression: Object): Object {
+    return t.callExpression(
+      this.file.addHelper("get"),
+      [
+        t.callExpression(
+          t.memberExpression(t.identifier("Object"), t.identifier("getPrototypeOf")),
+          [
+            this.isStatic ? this.getObjectRef() : t.memberExpression(this.getObjectRef(), t.identifier("prototype"))
+          ]
+        ),
+        isComputed ? property : t.literal(property.name),
+        thisExpression
+      ]
+    );
+  }
 
   /**
    * Description
@@ -80,7 +131,7 @@ export default class ReplaceSupers {
    * Description
    */
 
-  traverseLevel(path: TraversalPath, topLevel: boolean) {
+  traverseLevel(path: NodePath, topLevel: boolean) {
     var state = { self: this, topLevel: topLevel };
     path.traverse(visitor, state);
   }
@@ -107,71 +158,34 @@ export default class ReplaceSupers {
 
   getLooseSuperProperty(id: Object, parent: Object) {
     var methodNode = this.methodNode;
-    console.info(methodNode);
-
     var methodName = methodNode.key;
-    var superRef   = t.memberExpression(
-      t.identifier("$class"),
-      t.identifier("supper")
-    );
+    var superRef   = this.superRef || t.identifier("Function");
+
     if (parent.property === id) {
       return;
-    } else
-    if (t.isCallExpression(parent, { callee: id })) {
+    } else if (t.isCallExpression(parent, { callee: id })) {
       // super(); -> objectRef.prototype.MethodName.call(this);
-      //parent.arguments.unshift(t.thisExpression());
+      parent.arguments.unshift(t.thisExpression());
+
       if (methodName.name === "constructor") {
         // constructor() { super(); }
-        return t.callExpression(
-          superRef,[
-          t.identifier("this")
-        ]) ;
+        return t.memberExpression(superRef, t.identifier("call"));
       } else {
-        return t.callExpression(superRef,[
-          t.identifier("this"),
-          t.literal(methodName.name)
-        ]);
+        id = superRef;
+
+        // foo() { super(); }
+        if (!methodNode.static) {
+          id = t.memberExpression(id, t.identifier("prototype"));
+        }
+
+        id = t.memberExpression(id, methodName, methodNode.computed);
+        return t.memberExpression(id, t.identifier("call"));
       }
-    } else
-    if (t.isMemberExpression(parent) && !methodNode.static) {
+    } else if (t.isMemberExpression(parent) && !methodNode.static) {
       // super.test -> objectRef.prototype.test
-      return t.callExpression(superRef,[
-        t.identifier("this"),
-        t.literal(parent.property.name)
-      ])
+      return t.memberExpression(superRef, t.identifier("prototype"));
     } else {
       return superRef;
-    }
-  }
-
-  addSuper(path,name){
-    var superScope = path.scope;
-    var superPath = superScope.path;
-    var superData = superPath.getData('_super',false);
-    if(!superData){
-      var superVar = t.identifier('_super');
-      var superVars = [t.identifier('this')];
-      var superCall = t.callExpression(t.memberExpression(
-        t.identifier('_class'),
-        t.identifier('supers')
-      ),superVars);
-      path.scope.path.setData('_super',superVars);
-      path.scope.push({
-        id     : superVar,
-        init   : superCall
-      })
-    }
-    if(name){
-      var found = false;
-      for(var i=0;i<superData.length;i++){
-        if(superData[i].value==name){
-          found = true;
-          break;
-        }
-      }
-      if(!found){
-        superData.push(t.literal(name));
-      }
     }
   }
 
@@ -179,82 +193,120 @@ export default class ReplaceSupers {
    * Description
    */
 
-  looseHandle(path: TraversalPath, getThisReference: Function) {
-    if(path.isSuper()){
-      var methodName = this.methodNode.key
-      var superField = false;
-      this.addSuper(path);
-      if(t.isMemberExpression(path.parent)){
-        this.addSuper(path,path.parent.property.name);
-      } else
-      if(t.isCallExpression(path.parent)){
-        if(methodName.name!='constructor'){
-          this.addSuper(path,methodName.name);
-          return t.memberExpression(t.identifier('_super'),methodName)
-        }else{
-          var c = path.parentPath.parentPath.node
-          var s = path.parentPath.parentPath.parentPath.node
-          s.body.splice(s.body.indexOf(c)+1,0,t.expressionStatement(
-            t.callExpression(
-              t.memberExpression(t.identifier('_class'),t.identifier('defaults')),
-              [getThisReference()]
-            )
-          ))
-        }
-      }
-      return t.identifier('_super');
-    }
-    /*
+  looseHandle(path: NodePath, getThisReference: Function) {
     var node = path.node;
-    var methodName = this.methodNode.key.name;
-    var prefix = this.methodNode.static?':':'.';
-    var superRef   = t.memberExpression(
-      t.identifier("$class"),
-      t.identifier("supper")
-    );
-    if(path.isMemberExpression()){
-      if(t.isSuper(node.object)){
-        var superName = '_super_'+node.property.name;
-        var superData = path.scope.path
-
-        if(!superData){
-          var superVar = path.scope.generateUidIdentifier(superName);
-          var lit = t.literal('SUPER GAGO');
-          path.scope.path.setData(superName,lit);
-          console.info(superName,superData)
-          path.scope.push({
-            id     : superVar,
-            init   : lit,
-            unique : true
-          })
-        }
-
-        return t.memberExpression(t.callExpression(superRef,[
-          getThisReference(),
-          t.literal(prefix+node.property.name)
-        ]),t.identifier('value'))
-      }
-    }else
-    if(path.isCallExpression()) {
+    if (path.isSuper()) {
+      return this.getLooseSuperProperty(node, path.parent);
+    } else if (path.isCallExpression()) {
       var callee = node.callee;
-      if(t.isSuper(callee)){
-        var args = [getThisReference()];
-        if(methodName!='constructor'){
-          args.push(t.literal(prefix+methodName));
-        }
-        node.callee = t.callExpression(superRef,args);
-        return true;
-      }
-
       if (!t.isMemberExpression(callee)) return;
       if (!t.isSuper(callee.object)) return;
-      node.callee = t.callExpression(superRef,[
-        getThisReference(),
-        t.literal(prefix+callee.property.name)
-      ])
+
+      // super.test(); -> objectRef.prototype.MethodName.call(this);
+      t.appendToMemberExpression(callee, t.identifier("call"));
+      node.arguments.unshift(getThisReference());
       return true;
     }
-    */
   }
 
+  /**
+   * Description
+   */
+
+  specHandleAssignmentExpression(ref, path, node, getThisReference) {
+    if (node.operator === "=") {
+      // super.name = "val"; -> _set(Object.getPrototypeOf(objectRef.prototype), "name", this);
+      return this.setSuperProperty(node.left.property, node.right, node.left.computed, getThisReference());
+    } else {
+      // super.age += 2; -> var _ref = super.age; super.age = _ref + 2;
+      ref = ref || path.scope.generateUidIdentifier("ref");
+      return [
+        t.variableDeclaration("var", [
+          t.variableDeclarator(ref, node.left)
+        ]),
+        t.expressionStatement(
+          t.assignmentExpression("=", node.left, t.binaryExpression(node.operator[0], ref, node.right))
+        )
+      ];
+    }
+  }
+
+  /**
+   * Description
+   */
+
+  specHandle(path: NodePath, getThisReference: Function) {
+    var methodNode = this.methodNode;
+    var property;
+    var computed;
+    var args;
+    var thisReference;
+
+    var parent = path.parent;
+    var node = path.node;
+
+    if (isIllegalBareSuper(node, parent)) {
+      throw path.errorWithNode(messages.get("classesIllegalBareSuper"));
+    }
+
+    if (t.isCallExpression(node)) {
+      var callee = node.callee;
+      if (t.isSuper(callee)) {
+        // super(); -> _get(Object.getPrototypeOf(objectRef), "MethodName", this).call(this);
+        property = methodNode.key;
+        computed = methodNode.computed;
+        args = node.arguments;
+
+        // bare `super` call is illegal inside non-constructors
+        //  - https://esdiscuss.org/topic/super-call-in-methods
+        //  - https://twitter.com/wycats/status/544553184396836864
+        if (methodNode.key.name !== "constructor" || !this.inClass) {
+          var methodName = methodNode.key.name || "METHOD_NAME";
+          throw this.file.errorWithNode(node, messages.get("classesIllegalSuperCall", methodName));
+        }
+      } else if (isMemberExpressionSuper(callee)) {
+        // super.test(); -> _get(Object.getPrototypeOf(objectRef.prototype), "test", this).call(this);
+        property = callee.property;
+        computed = callee.computed;
+        args = node.arguments;
+      }
+    } else if (t.isMemberExpression(node) && t.isSuper(node.object)) {
+      // super.name; -> _get(Object.getPrototypeOf(objectRef.prototype), "name", this);
+      property = node.property;
+      computed = node.computed;
+    } else if (t.isUpdateExpression(node) && isMemberExpressionSuper(node.argument)) {
+      var binary = t.binaryExpression(node.operator[0], node.argument, t.literal(1));
+      if (node.prefix) {
+        // ++super.foo; -> super.foo += 1;
+        return this.specHandleAssignmentExpression(null, path, binary, getThisReference);
+      } else {
+        // super.foo++; -> var _ref = super.foo; super.foo = _ref + 1;
+        var ref = path.scope.generateUidIdentifier("ref");
+        return this.specHandleAssignmentExpression(ref, path, binary, getThisReference).concat(t.expressionStatement(ref));
+      }
+    } else if (t.isAssignmentExpression(node) && isMemberExpressionSuper(node.left)) {
+      return this.specHandleAssignmentExpression(null, path, node, getThisReference);
+    }
+
+    if (!property) return;
+
+    thisReference = getThisReference();
+    var superProperty = this.getSuperProperty(property, computed, thisReference);
+    if (args) {
+      if (args.length === 1 && t.isSpreadElement(args[0])) {
+        // super(...arguments);
+        return t.callExpression(
+          t.memberExpression(superProperty, t.identifier("apply")),
+          [thisReference, args[0].argument]
+        );
+      } else {
+        return t.callExpression(
+          t.memberExpression(superProperty, t.identifier("call")),
+          [thisReference, ...args]
+        );
+      }
+    } else {
+      return superProperty;
+    }
+  }
 }

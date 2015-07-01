@@ -43,9 +43,6 @@ export class Project {
         ].join('/'),
         modules  : 'asx'
       });
-      if(result.deps.length){
-        this.dependencies[file.name]=result.deps;
-      }
       file.output = result.code;
     }catch(ex){
       console.error(ex);

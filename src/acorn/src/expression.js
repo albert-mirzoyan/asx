@@ -214,7 +214,12 @@ pp.parseExprSubscripts = function(refShorthandDefaultPos) {
 }
 
 pp.parseSubscripts = function(base, start, noCalls) {
-  if (this.eat(tt.dot)) {
+  if (!noCalls && this.eat(tt.doubleColon)) {
+    let node = this.startNodeAt(start)
+    node.object = base
+    node.callee = this.parseNoCallExpr()
+    return this.parseSubscripts(this.finishNode(node, "BindExpression"), start, noCalls)
+  } else if (this.eat(tt.dot)) {
     let node = this.startNodeAt(start)
     node.object = base
     node.property = this.parseIdent(true)
@@ -240,6 +245,13 @@ pp.parseSubscripts = function(base, start, noCalls) {
   } return base
 }
 
+// Parse a no-call expression (like argument of `new` or `::` operators).
+
+pp.parseNoCallExpr = function() {
+  let start = this.markPosition()
+  return this.parseSubscripts(this.parseExprAtom(), start, true)
+}
+
 // Parse an atomic expression — either a single token that is an
 // expression, an expression started by a keyword like `function` or
 // `new`, or an expression wrapped in punctuation like `()`, `[]`,
@@ -262,7 +274,13 @@ pp.parseExprAtom = function(refShorthandDefaultPos) {
     if (this.options.features["es7.doExpressions"]) {
       let node = this.startNode()
       this.next()
+      var oldInFunction = this.inFunction
+      var oldLabels = this.labels
+      this.labels = []
+      this.inFunction = false
       node.body = this.parseBlock()
+      this.inFunction = oldInFunction
+      this.labels = oldLabels
       return this.finishNode(node, "DoExpression")
     }
 
@@ -274,7 +292,7 @@ pp.parseExprAtom = function(refShorthandDefaultPos) {
     //
     if (this.options.features["es7.asyncFunctions"]) {
       // async functions!
-      if (id.name === "async") {
+      if (id.name === "async" && !this.canInsertSemicolon()) {
         // arrow functions
         if (this.type === tt.parenL) {
           let expr = this.parseParenAndDistinguishExpression(start, true, true)
@@ -362,6 +380,15 @@ pp.parseExprAtom = function(refShorthandDefaultPos) {
 
   case tt.backQuote:
     return this.parseTemplate()
+
+  case tt.doubleColon:
+    node = this.startNode()
+    this.next()
+    node.object = null
+    let callee = node.callee = this.parseNoCallExpr()
+    if (callee.type !== "MemberExpression")
+      this.raise(callee.start, "Binding should be performed on object property.")
+    return this.finishNode(node, "BindExpression")
 
   default:
     this.unexpected()
@@ -472,9 +499,11 @@ pp.parseNew = function() {
       this.raise(node.property.start, "The only valid meta property for new is new.target")
     return this.finishNode(node, "MetaProperty")
   }
-  let start = this.markPosition()
-  node.callee = this.parseSubscripts(this.parseExprAtom(), start, true)
-  if (this.eat(tt.parenL)) node.arguments = this.parseExprList(tt.parenR, false)
+  node.callee = this.parseNoCallExpr()
+  if (this.eat(tt.parenL)) node.arguments = this.parseExprList(
+    tt.parenR,
+    this.options.features["es7.trailingFunctionCommas"]
+  )
   else node.arguments = empty
   return this.finishNode(node, "NewExpression")
 }
@@ -484,7 +513,7 @@ pp.parseNew = function() {
 pp.parseTemplateElement = function() {
   let elem = this.startNode()
   elem.value = {
-    raw: this.input.slice(this.start, this.end),
+    raw: this.input.slice(this.start, this.end).replace(/\r\n?/g, '\n'),
     cooked: this.value
   }
   this.next()
@@ -632,7 +661,7 @@ pp.parseMethod = function(isGenerator, isAsync) {
   let node = this.startNode()
   this.initFunction(node, isAsync)
   this.expect(tt.parenL)
-  node.params = this.parseBindingList(tt.parenR, false, false)
+  node.params = this.parseBindingList(tt.parenR, false, this.options.features["es7.trailingFunctionCommas"])
   if (this.options.ecmaVersion >= 6) {
     node.generator = isGenerator
   }

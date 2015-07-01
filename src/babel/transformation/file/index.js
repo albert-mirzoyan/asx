@@ -1,47 +1,34 @@
+import { validateOption, normaliseOptions, config as optionsConfig } from "./options";
 import convertSourceMap from "convert-source-map";
-import * as optionParsers from "./option-parsers";
 import moduleFormatters from "../modules";
 import PluginManager from "./plugin-manager";
 import shebangRegex from "shebang-regex";
-import TraversalPath from "../../traversal/path";
+import NodePath from "../../traversal/path";
 import isFunction from "lodash/lang/isFunction";
 import isAbsolute from "path-is-absolute";
-import resolveRc from "../../tools/resolve-rc";
+import resolveRc from "./options/resolve-rc";
 import sourceMap from "source-map";
-import transform from "./../index";
 import generate from "../../generation";
-import stringify from "../../helpers/stringify-ast";
 import codeFrame from "../../helpers/code-frame";
 import defaults from "lodash/object/defaults";
 import includes from "lodash/collection/includes";
 import traverse from "../../traversal";
 import assign from "lodash/object/assign";
 import Logger from "./logger";
+import Plugin from "../plugin";
 import parse from "../../helpers/parse";
-import Scope from "../../traversal/scope";
+import merge from "../../helpers/merge";
 import slash from "slash";
 import clone from "lodash/lang/clone";
+import Hub from "../../traversal/hub";
 import * as util from  "../../util";
-import * as api from  "../../api/node";
 import path from "path";
-import each from "lodash/collection/each";
 import * as t from "../../types";
-
-var checkTransformerVisitor = {
-  exit(node, parent, scope, state) {
-    checkPath(state.stack, this);
-  }
-};
-
-function checkPath(stack, path) {
-  each(stack, function (pass) {
-    if (pass.shouldRun || pass.ran) return;
-    pass.checkPath(path);
-  });
-}
 
 export default class File {
   constructor(opts = {}, pipeline=null) {
+    this.transformerDependencies = {};
+
     this.dynamicImportTypes = {};
     this.dynamicImportIds   = {};
     this.dynamicImports     = [];
@@ -50,14 +37,26 @@ export default class File {
     this.usedHelpers  = {};
     this.dynamicData  = {};
     this.data         = {};
-    this.uids         = {};
+
+    this.metadata = {
+      modules: {
+        imports: [],
+        exports: {
+          exported: [],
+          specifiers: []
+        }
+      }
+    };
 
     this.pipeline = pipeline;
     this.log      = new Logger(this, opts.filename || "unknown");
-    this.opts     = this.normalizeOptions(opts);
     this.ast      = {};
 
+    this.normaliseOptions(opts);
+
     this.buildTransformers();
+
+    this.hub = new Hub(this);
   }
 
   static helpers = [
@@ -92,30 +91,26 @@ export default class File {
     "self-global",
     "default-props",
     "instanceof",
-    "E56",
 
     // legacy
     "interop-require",
   ];
 
-  static soloHelpers = [
-    "ludicrous-proxy-create",
-    "ludicrous-proxy-directory"
-  ];
+  static soloHelpers = [];
 
-  static options = require("./options");
+  static options = optionsConfig;
 
-  normalizeOptions(opts: Object) {
-    opts = assign({}, opts);
+  normaliseOptions(opts: Object) {
+    opts = this.opts = normaliseOptions(assign({}, opts));
 
+    // resolve babelrc
     if (opts.filename) {
       var rcFilename = opts.filename;
       if (!isAbsolute(rcFilename)) rcFilename = path.join(process.cwd(), rcFilename);
       opts = resolveRc(rcFilename, opts);
     }
 
-    //
-
+    // check for unknown options
     for (let key in opts) {
       if (key[0] === "_") continue;
 
@@ -123,23 +118,30 @@ export default class File {
       if (!option) this.log.error(`Unknown option: ${key}`, ReferenceError);
     }
 
+    // merge in environment options
+    var envKey = process.env.BABEL_ENV || process.env.NODE_ENV || "development";
+    if (opts.env) merge(opts, normaliseOptions(opts.env[envKey]));
+
+    // normalise options
     for (let key in File.options) {
       let option = File.options[key];
+      var val    = opts[key];
 
-      var val = opts[key];
+      // optional
       if (!val && option.optional) continue;
 
+      // deprecated
       if (val && option.deprecated) {
-        throw new Error("Deprecated option " + key + ": " + option.deprecated);
+        this.log.deprecate("Deprecated option " + key + ": " + option.deprecated);
       }
 
-      if (val == null) {
-        val = clone(option.default);
-      }
+      // default
+      if (val == null) val = clone(option.default);
 
-      var optionParser = optionParsers[option.type];
-      if (optionParser) val = optionParser(key, val, this.pipeline);
+      // validate
+      if (val) val = validateOption(key, val, this.pipeline);
 
+      // aaliases
       if (option.alias) {
         opts[option.alias] = opts[option.alias] || val;
       } else {
@@ -164,7 +166,10 @@ export default class File {
     opts.basename = path.basename(opts.filename, path.extname(opts.filename));
 
     opts.ignore = util.arrayify(opts.ignore, util.regexify);
-    opts.only   = util.arrayify(opts.only, util.regexify);
+
+    if (opts.only) {
+      opts.only = util.arrayify(opts.only, util.regexify);
+    }
 
     defaults(opts, {
       moduleRoot: opts.sourceRoot
@@ -180,7 +185,7 @@ export default class File {
 
     defaults(opts, {
       sourceFileName: opts.filenameRelative,
-      sourceMapName:  opts.filenameRelative
+      sourceMapTarget:  opts.filenameRelative
     });
 
     //
@@ -205,8 +210,9 @@ export default class File {
     var stack = [];
 
     // build internal transformers
-    each(this.pipeline.transformers, function (transformer, key) {
-      var pass = transformers[key] = transformer.buildPass(file);
+    for (var key in this.pipeline.transformers) {
+      var transformer = this.pipeline.transformers[key];
+      let pass = transformers[key] = transformer.buildPass(file);
 
       if (pass.canTransform()) {
         stack.push(pass);
@@ -219,7 +225,7 @@ export default class File {
           transformer.manipulateOptions(file.opts, file);
         }
       }
-    });
+    }
 
     // init plugins!
     var beforePlugins = [];
@@ -235,8 +241,54 @@ export default class File {
     }
     stack = beforePlugins.concat(stack, afterPlugins);
 
-    // register
-    this.transformerStack = stack.concat(secondaryStack);
+    // build transformer stack
+    this.uncollapsedTransformerStack = stack = stack.concat(secondaryStack);
+
+    // build dependency graph
+    for (let pass of (stack: Array)) {
+      for (var dep of (pass.plugin.dependencies: Array)) {
+        this.transformerDependencies[dep] = pass.key;
+      }
+    }
+
+    // collapse stack categories
+    this.transformerStack = this.collapseStack(stack);
+  }
+
+  collapseStack(_stack) {
+    var stack  = [];
+    var ignore = [];
+
+    for (let pass of (_stack: Array)) {
+      // been merged
+      if (ignore.indexOf(pass) >= 0) continue;
+
+      var group = pass.plugin.metadata.group;
+
+      // can't merge
+      if (!pass.canTransform() || !group) {
+        stack.push(pass);
+        continue;
+      }
+
+      var mergeStack = [];
+      for (let pass of (_stack: Array)) {
+        if (pass.plugin.metadata.group === group) {
+          mergeStack.push(pass);
+          ignore.push(pass);
+        }
+      }
+
+      var visitors = [];
+      for (let pass of (mergeStack: Array)) {
+        visitors.push(pass.plugin.visitor);
+      }
+      var visitor = traverse.visitors.merge(visitors);
+      var mergePlugin = new Plugin(group, { visitor });
+      stack.push(mergePlugin.buildPass(this));
+    }
+
+    return stack;
   }
 
   set(key: string, val): any {
@@ -283,7 +335,7 @@ export default class File {
       }
 
       if (this.transformers["es6.modules"].canTransform()) {
-        this.moduleFormatter.importSpecifier(specifiers[0], declar, this.dynamicImports);
+        this.moduleFormatter.importSpecifier(specifiers[0], declar, this.dynamicImports, this.scope);
         this.moduleFormatter.hasLocalImports = true;
       } else {
         this.dynamicImports.push(declar);
@@ -294,14 +346,24 @@ export default class File {
   }
 
   attachAuxiliaryComment(node: Object): Object {
-    var comment = this.opts.auxiliaryComment;
-    if (comment) {
+    var beforeComment = this.opts.auxiliaryCommentBefore;
+    if (beforeComment) {
       node.leadingComments = node.leadingComments || [];
       node.leadingComments.push({
-        type: "Line",
-        value: " " + comment
+        type: "CommentLine",
+        value: " " + beforeComment
       });
     }
+
+    var afterComment = this.opts.auxiliaryCommentAfter;
+    if (afterComment) {
+      node.trailingComments = node.trailingComments || [];
+      node.trailingComments.push({
+        type: "CommentLine",
+        value: " " + afterComment
+      });
+    }
+
     return node;
   }
 
@@ -311,8 +373,6 @@ export default class File {
     if (!isSolo && !includes(File.helpers, name)) {
       throw new ReferenceError(`Unknown helper ${name}`);
     }
-
-    var program = this.ast.program;
 
     var declar = this.declarations[name];
     if (declar) return declar;
@@ -339,6 +399,7 @@ export default class File {
       ref._generated = true;
       ref.id = uid;
       ref.type = "FunctionDeclaration";
+      this.attachAuxiliaryComment(ref);
       this.path.unshiftContainer("body", ref);
     } else {
       ref._compact = true;
@@ -353,27 +414,16 @@ export default class File {
   }
 
   errorWithNode(node, msg, Error = SyntaxError) {
-    var loc = node.loc.start;
-    var err = new Error(`Line ${loc.line}: ${msg}`);
-    err.loc = loc;
-    return err;
-  }
-
-  checkPath(path) {
-    if (Array.isArray(path)) {
-      for (var i = 0; i < path.length; i++) {
-        this.checkPath(path[i]);
-      }
-      return;
+    var err;
+    if (node && node.loc) {
+      var loc = node.loc.start;
+      err = new Error(`Line ${loc.line}: ${msg}`);
+      err.loc = loc;
+    } else {
+      // todo: find errors with nodes inside to at least point to something
+      err = new Error("There's been an error on a dynamic node. This is almost certainly an internal error. Please report it.");
     }
-
-    var stack = this.transformerStack;
-
-    checkPath(stack, path);
-
-    path.traverse(checkTransformerVisitor, {
-      stack: stack
-    });
+    return err;
   }
 
   mergeSourceMap(map: Object) {
@@ -390,7 +440,7 @@ export default class File {
       outputMapGenerator.applySourceMap(inputMapConsumer);
 
       var mergedMap = outputMapGenerator.toJSON();
-      mergedMap.sources = inputMap.sources
+      mergedMap.sources = inputMap.sources;
       mergedMap.file    = inputMap.file;
       return mergedMap;
     }
@@ -400,6 +450,10 @@ export default class File {
 
 
   getModuleFormatter(type: string) {
+    if (isFunction(type) || !moduleFormatters[type]) {
+      this.log.deprecate("Custom module formatters are deprecated and will be removed in the next major. Please use Babel plugins instead.");
+    }
+
     var ModuleFormatter = isFunction(type) ? type : moduleFormatters[type];
 
     if (!ModuleFormatter) {
@@ -433,41 +487,25 @@ export default class File {
     }
 
     parseOpts.looseModules = this.isLoose("es6.modules");
-    parseOpts.strictMode = false;//features.strict;
+    parseOpts.strictMode = features.strict;
     parseOpts.sourceType = "module";
 
     this.log.debug("Parse start");
-
     var tree = parse(code, parseOpts);
     this.log.debug("Parse stop");
     return tree;
   }
 
   _addAst(ast) {
-
-    this.path  = TraversalPath.get(null, null, ast, ast, "program", this);
+    this.path = NodePath.get({
+      hub: this.hub,
+      parentPath: null,
+      parent: ast,
+      container: ast,
+      key: "program"
+    }).setContext();
     this.scope = this.path.scope;
     this.ast   = ast;
-    this.sast  = JSON.parse(JSON.ast(ast));
-    var deps = {}
-    this.path.traverse({
-      enter(node, parent, scope) {
-        if(this.isImportDeclaration()){
-          deps[node.source.value] = true;
-        }
-        if(this.isExportDeclaration()){
-          if(node.source){
-            deps[node.source.value] = true;
-          }
-        }
-        if (this.isScope()) {
-          for (var key in scope.bindings) {
-            scope.bindings[key].setTypeAnnotation();
-          }
-        }
-      }
-    });
-    this.deps = Object.keys(deps);
   }
 
   addAst(ast) {
@@ -475,22 +513,22 @@ export default class File {
     this._addAst(ast);
     this.log.debug("End set AST");
 
-    this.log.debug("Start prepass");
-    this.checkPath(this.path);
-    this.log.debug("End prepass");
-
     this.log.debug("Start module formatter init");
     var modFormatter = this.moduleFormatter = this.getModuleFormatter(this.opts.modules);
     if (modFormatter.init && this.transformers["es6.modules"].canTransform()) {
       modFormatter.init();
     }
     this.log.debug("End module formatter init");
+  }
 
+  transform() {
     this.call("pre");
-    each(this.transformerStack, function (pass) {
+    for (var pass of (this.transformerStack: Array)) {
       pass.transform();
-    });
+    }
     this.call("post");
+
+    return this.generate();
   }
 
   wrap(code, callback) {
@@ -498,17 +536,10 @@ export default class File {
 
     try {
       if (this.shouldIgnore()) {
-        return {
-          metadata: {},
-          code:     code,
-          map:      null,
-          ast:      null
-        };
+        return this.makeResult({ code, ignored: true });
+      } else {
+        return callback();
       }
-
-      callback();
-
-      return this.generate();
     } catch (err) {
       if (err._babel) {
         throw err;
@@ -537,15 +568,15 @@ export default class File {
     }
   }
 
-  addCode(code: string, parseCode) {
+  addCode(code: string) {
     code = (code || "") + "";
     code = this.parseInputSourceMap(code);
     this.code = code;
+  }
 
-    if (parseCode) {
-      this.parseShebang();
-      this.addAst(this.parse(this.code));
-    }
+  parseCode() {
+    this.parseShebang();
+    this.addAst(this.parse(this.code));
   }
 
   shouldIgnore() {
@@ -554,10 +585,8 @@ export default class File {
   }
 
   call(key: string) {
-    var stack = this.transformerStack;
-    for (var i = 0; i < stack.length; i++) {
-      var transformer = stack[i].transformer;
-      var fn = transformer[key];
+    for (var pass of (this.uncollapsedTransformerStack: Array)) {
+      var fn = pass.plugin[key];
       if (fn) fn(this);
     }
   }
@@ -584,28 +613,37 @@ export default class File {
     }
   }
 
-  generate(){
-    var opts = this.opts;
-    var ast  = this.ast;
-    var sast  = this.sast;
-
+  makeResult({ code, map = null, ast, ignored }) {
     var result = {
-      metadata: {},
-      code:     "",
-      map:      null,
+      metadata: null,
+      ignored:  !!ignored,
+      code:     null,
       ast:      null,
-      deps: this.deps
+      map:      map
     };
 
-    if (this.opts.metadataUsedHelpers) {
+    if (this.opts.code) {
+      result.code = code;
+    }
+
+    if (this.opts.ast) {
+      result.ast = ast;
+    }
+
+    if (this.opts.metadata) {
+      result.metadata = this.metadata;
       result.metadata.usedHelpers = Object.keys(this.usedHelpers);
     }
 
-    if (opts.ast) {
-      result.ast = ast;
-      result.sast = sast;
-    }
-    if (!opts.code) return result;
+    return result;
+  }
+
+  generate() {
+    var opts = this.opts;
+    var ast  = this.ast;
+
+    var result = { ast };
+    if (!opts.code) return this.makeResult(result);
 
     this.log.debug("Generation start");
 
@@ -632,6 +670,6 @@ export default class File {
       result.map = null;
     }
 
-    return result;
+    return this.makeResult(result);
   }
 }

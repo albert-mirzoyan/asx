@@ -7,11 +7,13 @@ export var metadata = {
   stage: 0
 };
 
-export function ComprehensionExpression(node, parent, scope, file) {
-  var callback = array;
-  if (node.generator) callback = generator;
-  return callback(node, parent, scope, file);
-}
+export var visitor = {
+  ComprehensionExpression(node, parent, scope) {
+    var callback = array;
+    if (node.generator) callback = generator;
+    return callback(node, parent, scope);
+  }
+};
 
 function generator(node) {
   var body = [];
@@ -25,8 +27,8 @@ function generator(node) {
   return t.callExpression(container, []);
 }
 
-function array(node, parent, scope, file) {
-  var uid = scope.generateUidBasedOnNode(parent);
+function array(node, parent, scope) {
+  var uid = scope.generateUidIdentifierBasedOnNode(parent);
 
   var container = util.template("array-comprehension-container", {
     KEY: uid

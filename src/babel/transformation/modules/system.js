@@ -2,56 +2,55 @@ import DefaultFormatter from "./_default";
 import AMDFormatter from "./amd";
 import * as util from  "../../util";
 import last from "lodash/array/last";
-import each from "lodash/collection/each";
 import map from "lodash/collection/map";
 import * as t from "../../types";
 
 var hoistVariablesVisitor = {
-  enter(node, parent, scope, state) {
-    if (t.isFunction(node)) {
-      // nothing inside is accessible
-      return this.skip();
+  Function() {
+    // nothing inside is accessible
+    this.skip();
+  },
+
+  VariableDeclaration(node, parent, scope, state) {
+    if (node.kind !== "var" && !t.isProgram(parent)) { // let, const
+      // can't be accessed
+      return;
     }
 
-    if (t.isVariableDeclaration(node)) {
-      if (node.kind !== "var" && !t.isProgram(parent)) { // let, const
-        // can't be accessed
-        return;
+    // ignore block hoisted nodes as these can be left in
+    if (state.formatter._canHoist(node)) return;
+
+    var nodes = [];
+
+    for (var i = 0; i < node.declarations.length; i++) {
+      var declar = node.declarations[i];
+      state.hoistDeclarators.push(t.variableDeclarator(declar.id));
+      if (declar.init) {
+        // no initializer so we can just hoist it as-is
+        var assign = t.expressionStatement(t.assignmentExpression("=", declar.id, declar.init));
+        nodes.push(assign);
       }
-
-      // ignore block hoisted nodes as these can be left in
-      if (state.formatter.canHoist(node)) return;
-
-      var nodes = [];
-
-      for (var i = 0; i < node.declarations.length; i++) {
-        var declar = node.declarations[i];
-        state.hoistDeclarators.push(t.variableDeclarator(declar.id));
-        if (declar.init) {
-          // no initializer so we can just hoist it as-is
-          var assign = t.expressionStatement(t.assignmentExpression("=", declar.id, declar.init));
-          nodes.push(assign);
-        }
-      }
-
-      // for (var i in test)
-      // for (var i = 0;;)
-      if (t.isFor(parent) && parent.left === node) {
-        return node.declarations[0].id;
-      }
-
-      return nodes;
     }
+
+    // for (var i in test)
+    // for (var i = 0;;)
+    if (t.isFor(parent) && (parent.left === node || parent.init === node)) {
+      return node.declarations[0].id;
+    }
+
+    return nodes;
   }
 };
 
 var hoistFunctionsVisitor = {
-  enter(node, parent, scope, state) {
-    if (t.isFunction(node)) this.skip();
+  Function() {
+    this.skip();
+  },
 
-    if (t.isFunctionDeclaration(node) || state.formatter.canHoist(node)) {
+  enter(node, parent, scope, state) {
+    if (t.isFunctionDeclaration(node) || state.formatter._canHoist(node)) {
       state.handlerBody.push(node);
-      this.remove();
+      this.dangerouslyRemove();
     }
   }
 };
@@ -60,17 +59,17 @@ var runnerSettersVisitor = {
   enter(node, parent, scope, state) {
     if (node._importSource === state.source) {
       if (t.isVariableDeclaration(node)) {
-        each(node.declarations, function (declar) {
+        for (var declar of (node.declarations: Array)) {
           state.hoistDeclarators.push(t.variableDeclarator(declar.id));
           state.nodes.push(t.expressionStatement(
             t.assignmentExpression("=", declar.id, declar.init)
           ));
-        });
+        }
       } else {
         state.nodes.push(node);
       }
 
-      this.remove();
+      this.dangerouslyRemove();
     }
   }
 };
@@ -82,6 +81,8 @@ export default class SystemFormatter extends AMDFormatter {
     this.exportIdentifier = file.scope.generateUidIdentifier("export");
     this.noInteropRequireExport = true;
     this.noInteropRequireImport = true;
+
+    this.remaps.clearAll();
   }
 
   _addImportSource(node, exportNode) {
@@ -100,14 +101,14 @@ export default class SystemFormatter extends AMDFormatter {
     var right = objectIdentifier;
 
     var block = t.blockStatement([
-      t.expressionStatement(this.buildExportCall(leftIdentifier, valIdentifier))
+      t.expressionStatement(this._buildExportCall(leftIdentifier, valIdentifier))
     ]);
 
     return this._addImportSource(t.forInStatement(left, right, block), node);
   }
 
   buildExportsAssignment(id, init, node) {
-    var call = this.buildExportCall(t.literal(id.name), init, true);
+    var call = this._buildExportCall(t.literal(id.name), init, true);
     return this._addImportSource(call, node);
   }
 
@@ -119,13 +120,13 @@ export default class SystemFormatter extends AMDFormatter {
     var assign = node;
 
     for (var i = 0; i < exported.length; i++) {
-      assign = this.buildExportCall(t.literal(exported[i].name), assign);
+      assign = this._buildExportCall(t.literal(exported[i].name), assign);
     }
 
     return assign;
   }
 
-  buildExportCall(id, init, isStatement) {
+  _buildExportCall(id, init, isStatement) {
     var call = t.callExpression(this.exportIdentifier, [id, init]);
     if (isStatement) {
       return t.expressionStatement(call);
@@ -137,18 +138,18 @@ export default class SystemFormatter extends AMDFormatter {
   importSpecifier(specifier, node, nodes) {
     AMDFormatter.prototype.importSpecifier.apply(this, arguments);
 
-    for (var name in this.internalRemap) {
+    for (var remap of (this.remaps.getAll(): Array)) {
       nodes.push(t.variableDeclaration("var", [
-        t.variableDeclarator(t.identifier(name), this.internalRemap[name])
+        t.variableDeclarator(t.identifier(remap.name), remap.node)
       ]));
     }
 
-    this.internalRemap = {};
+    this.remaps.clearAll();
 
     this._addImportSource(last(nodes), node);
   }
 
-  buildRunnerSetters(block, hoistDeclarators) {
+  _buildRunnerSetters(block, hoistDeclarators) {
     var scope = this.file.scope;
 
     return t.arrayExpression(map(this.ids, function (uid, source) {
@@ -164,7 +165,7 @@ export default class SystemFormatter extends AMDFormatter {
     }));
   }
 
-  canHoist(node) {
+  _canHoist(node) {
     return node._blockHoist && !this.file.dynamicImports.length;
   }
 
@@ -181,7 +182,7 @@ export default class SystemFormatter extends AMDFormatter {
       MODULE_DEPENDENCIES: t.arrayExpression(this.buildDependencyLiterals()),
       EXPORT_IDENTIFIER:   this.exportIdentifier,
       MODULE_NAME:         moduleNameLiteral,
-      SETTERS:             this.buildRunnerSetters(block, hoistDeclarators),
+      SETTERS:             this._buildRunnerSetters(block, hoistDeclarators),
       EXECUTE:             t.functionExpression(null, [], block)
     }, true);
 

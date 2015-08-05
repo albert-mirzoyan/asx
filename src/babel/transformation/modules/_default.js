@@ -27,7 +27,7 @@ var metadataVisitor = {
         specifiers
       });
 
-      for (var specifier of (this.get("specifiers"): Array)) {
+      for (var specifier of this.get("specifiers")) {
         var ids = specifier.getBindingIdentifiers();
         extend(formatter.localImports, ids);
 
@@ -89,7 +89,7 @@ var metadataVisitor = {
     }
 
     if (this.isExportNamedDeclaration() && node.specifiers) {
-      for (var specifier of (node.specifiers: Array)) {
+      for (var specifier of node.specifiers) {
         var exported = specifier.exported.name;
         exports.exported.push(exported);
 
@@ -217,7 +217,7 @@ export default class DefaultFormatter {
 
   getMetadata() {
     var has = false;
-    for (var node of (this.file.ast.program.body: Array)) {
+    for (var node of this.file.ast.program.body) {
       if (t.isModuleDeclaration(node)) {
         has = true;
         break;

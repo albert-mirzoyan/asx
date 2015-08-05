@@ -56,7 +56,7 @@ export var visitor = {
 
   Function(node, parent, scope, file) {
     var hasDestructuring = false;
-    for (let pattern of (node.params: Array)) {
+    for (let pattern of node.params) {
       if (t.isPattern(pattern)) {
         hasDestructuring = true;
         break;

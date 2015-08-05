@@ -1,5 +1,5 @@
 import sourceMap from "source-map";
-import * as t from "../types";
+import * as t from "../../babel/types";
 
 export default class SourceMap {
   constructor(position, opts, code) {

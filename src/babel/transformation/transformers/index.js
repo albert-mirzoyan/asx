@@ -21,6 +21,9 @@ export default {
   //- builtin-basic
   // this is where the bulk of the ES6 transformations take place, none of them require traversal state
   // so they can all be concatenated together for performance
+  "asx.modules":                           require("./asx/modules"),
+  "es6.classes":                           require("./asx/classes"),
+  "asx.classes":                           require("./asx/classes"),
   "es7.classProperties":                   require("./es7/class-properties"),
   "es7.trailingFunctionCommas":            require("./es7/trailing-function-commas"),
   "es7.asyncFunctions":                    require("./es7/async-functions"),
@@ -31,7 +34,7 @@ export default {
   "optimisation.react.constantElements":   require("babel-plugin-react-constant-elements"),
   "optimisation.react.inlineElements":     require("./optimisation/react.inline-elements"),
   "es7.comprehensions":                    require("./es7/comprehensions"),
-  "es6.classes":                           require("./es6/classes"),
+
   asyncToGenerator:                        require("./other/async-to-generator"),
   bluebirdCoroutines:                      require("./other/bluebird-coroutines"),
   "es6.objectSuper":                       require("./es6/object-super"),

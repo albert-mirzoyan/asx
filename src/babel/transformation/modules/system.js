@@ -59,7 +59,7 @@ var runnerSettersVisitor = {
   enter(node, parent, scope, state) {
     if (node._importSource === state.source) {
       if (t.isVariableDeclaration(node)) {
-        for (var declar of (node.declarations: Array)) {
+        for (var declar of node.declarations) {
           state.hoistDeclarators.push(t.variableDeclarator(declar.id));
           state.nodes.push(t.expressionStatement(
             t.assignmentExpression("=", declar.id, declar.init)
@@ -138,7 +138,7 @@ export default class SystemFormatter extends AMDFormatter {
   importSpecifier(specifier, node, nodes) {
     AMDFormatter.prototype.importSpecifier.apply(this, arguments);
 
-    for (var remap of (this.remaps.getAll(): Array)) {
+    for (var remap of this.remaps.getAll()) {
       nodes.push(t.variableDeclaration("var", [
         t.variableDeclarator(t.identifier(remap.name), remap.node)
       ]));

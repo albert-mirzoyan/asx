@@ -130,7 +130,7 @@ for (let type in virtualTypes) {
   };
 }
 
-for (let type of (t.TYPES: Array)) {
+for (let type of t.TYPES) {
   let typeKey = `is${type}`;
   NodePath.prototype[typeKey] = function (opts) {
     return t[typeKey](this.node, opts);

@@ -2,13 +2,12 @@ import Pipeline from "./pipeline";
 
 var pipeline = new Pipeline;
 
-//
+//6024279563
 
-import transformers from "./transformers";
+import transformers from "./transformers/index";
 
 for (var key in transformers) {
   var transformer = transformers[key];
-
   if (typeof transformer === "object") {
     var metadata = transformer.metadata = transformer.metadata || {};
     metadata.group = metadata.group || "builtin-basic";

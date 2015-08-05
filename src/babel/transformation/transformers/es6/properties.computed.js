@@ -68,7 +68,7 @@ export var visitor = {
     exit(node, parent, scope, file) {
       var hasComputed = false;
 
-      for (var prop of (node.properties: Array)) {
+      for (var prop of node.properties) {
         hasComputed = t.isProperty(prop, { computed: true, kind: "init" });
         if (hasComputed) break;
       }

@@ -4,13 +4,15 @@ import includes from "lodash/collection/includes";
 import values from "lodash/object/values";
 import * as util from  "../../util";
 import * as t from "../../types";
+import Helper from "../../helpers/helper";
 
 export default class AsxFormatter extends DefaultFormatter {
+
   static options(ast){
     var options = {};
     if(ast.comments && ast.comments.length){
       var comment = ast.comments.shift();
-      if(comment.type == 'Block'){
+      if(comment.type == 'CommentBlock'){
         options = comment.value.match(/\*\s*@module\s+(\{[^}]*\})/g);
         if(options){
           options = options[0].split('\n').map(l=>{
@@ -26,20 +28,22 @@ export default class AsxFormatter extends DefaultFormatter {
     return options || {};
   }
 
-  constructor(...args){
-    super(...args);
+  constructor(file){
+    super(file);
+    this.project = file.project;
     this.imports = {};
     this.exports = {};
   }
 
   getImport(name){
+    name = Helper.encodeModuleName(this.project.resolve(this.getModuleName(),name||this.getModuleName()));
     if(!this.imports[name]){
       this.imports[name] = {}
     }
     return this.imports[name];
   }
   getExport(name){
-    name = name || '*';
+    name = Helper.encodeModuleName(this.project.resolve(this.getModuleName(),name||this.getModuleName()));
     if(!this.exports[name]){
       this.exports[name] = {}
     }
@@ -51,12 +55,14 @@ export default class AsxFormatter extends DefaultFormatter {
    */
 
   transform(program) {
+    /*
     var options = AsxFormatter.options(this.file.ast);
     //DefaultFormatter.prototype.transform.apply(this, arguments);
 
     var locals = [];
     var definitions = [];
     var body = [];
+
     program.body.forEach(item=>{
       switch(item.type){
         case 'ExpressionStatement':
@@ -98,7 +104,6 @@ export default class AsxFormatter extends DefaultFormatter {
 
 
     if(Object.keys(this.imports).length){
-
       Object.keys(this.imports).forEach(key=>{
         var items = this.imports[key];
         if(items['*'] && typeof items['*']=='string'){
@@ -161,7 +166,7 @@ export default class AsxFormatter extends DefaultFormatter {
       }
 
     });
-    definer = t.objectExpression(definer);
+    definer = t.objectExpression(definer);*/
     /*
     var definer = t.functionExpression(null, [t.identifier("module")], t.blockStatement(body));
     if(options.bind){
@@ -174,18 +179,63 @@ export default class AsxFormatter extends DefaultFormatter {
         ]
       );
     }*/
-    var body = [];
-    var definer = util.template("asx-module",{
-      MODULE_NAME: t.literal(this.getModuleName()),
-      MODULE_BODY: definer
-    });
-    if(options.runtime){
-      var rt = util.template("asx-runtime")
-      //rt._compact = true;
-      body.push(t.expressionStatement(rt));
+    var body  = [];
+    if(Object.keys(this.imports).length){
+      Object.keys(this.imports).forEach(key=>{
+        var items = this.imports[key];
+        if(items['*'] && typeof items['*']=='string'){
+          this.imports[key]=items['*'];
+        }
+      });
+      body.push(t.expressionStatement(t.callExpression(t.identifier('ʃꜜ'),[
+          t.valueToNode(this.imports)
+      ])))
     }
-    body.push(t.expressionStatement(definer))
-    program.body = body;
+    if(Object.keys(this.exports).length){
+      Object.keys(this.exports).forEach(key=>{
+        var items = this.exports[key];
+        if(items['*'] && typeof items['*']=='string'){
+          this.exports[key]=items['*'];
+        }
+      });
+      body.push(t.expressionStatement(t.callExpression(t.identifier('ʃꜛ'),[
+        t.valueToNode(this.exports)
+      ])))
+    }
+
+    program.body.forEach(item=>{
+      switch(item.type){
+        case 'ExpressionStatement':
+          var exp = item.expression;
+          if(!(exp.type=='Literal' && exp.value.toLowerCase()=='use strict')){
+            body.push(item);
+          }
+          break;
+        case 'VariableDeclaration':
+          item.declarations.forEach(d=>{
+            body.push(t.expressionStatement(util.template("asx-module-field",{
+              FIELD_NAME: d.id,
+              FIELD_INIT: d.init
+            })));
+          });
+          break;
+        case 'FunctionDeclaration':
+          item.type = 'FunctionExpression';
+          body.push(t.expressionStatement(util.template("asx-module-method",{
+            BODY : item
+          })));
+          break;
+        default:
+          //body.push(item);
+      }
+
+    });
+    program.body = [
+      t.expressionStatement(util.template("asx-module",{
+        MODULE_NAME: t.identifier(Helper.encodeModuleName(this.getModuleName())),
+        MODULE_BODY: body
+      }))
+    ];
   }
 
   /**
@@ -193,7 +243,10 @@ export default class AsxFormatter extends DefaultFormatter {
    * to define this module
    */
   getModuleName() {
-    return super.getModuleName();
+    if(!this.moduleName){
+      this.moduleName =super.getModuleName();
+    }
+    return this.moduleName;
   }
   importDeclaration(node) {
     this.getImport(node.source.value)['*'] = '*';

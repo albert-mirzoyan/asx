@@ -26,13 +26,13 @@ export var metadata = {
 export var visitor = {
   ExportDefaultDeclaration(node, parent, scope) {
     var declar = node.declaration;
-
     if (t.isClassDeclaration(declar)) {
       // export default class Foo {};
       let nodes = [getDeclar(node), node];
       node.declaration = declar.id;
       return nodes;
-    } else if (t.isClassExpression(declar)) {
+    } else
+    if (t.isClassExpression(declar)) {
       // export default class {};
       var temp = scope.generateUidIdentifier("default");
       node.declaration = t.variableDeclaration("var", [
@@ -42,7 +42,8 @@ export var visitor = {
       let nodes = [getDeclar(node), node];
       node.declaration = temp;
       return nodes;
-    } else if (t.isFunctionDeclaration(declar)) {
+    } else
+    if (t.isFunctionDeclaration(declar)) {
       // export default function Foo() {}
       node._blockHoist = 2;
 
@@ -51,10 +52,8 @@ export var visitor = {
       return nodes;
     }
   },
-
   ExportNamedDeclaration(node) {
     var declar = node.declaration;
-
     if (t.isClassDeclaration(declar)) {
       // export class Foo {}
       node.specifiers  = [buildExportSpecifier(declar.id)];
@@ -62,7 +61,8 @@ export var visitor = {
       let nodes = [getDeclar(node), node];
       node.declaration = null;
       return nodes;
-    } else if (t.isFunctionDeclaration(declar)) {
+    } else
+    if (t.isFunctionDeclaration(declar)) {
       // export function Foo() {}
       node.specifiers  = [buildExportSpecifier(declar.id)];
       node._blockHoist = 2;
@@ -70,7 +70,8 @@ export var visitor = {
       let nodes = [getDeclar(node), node];
       node.declaration = null;
       return nodes;
-    } else if (t.isVariableDeclaration(declar)) {
+    } else
+    if (t.isVariableDeclaration(declar)) {
       // export var foo = "bar";
       var specifiers = [];
       var bindings = this.get("declaration").getBindingIdentifiers();
@@ -80,12 +81,10 @@ export var visitor = {
       return [declar, t.exportNamedDeclaration(null, specifiers)];
     }
   },
-
   Program: {
     enter(node) {
       var imports = [];
       var rest    = [];
-
       for (var i = 0; i < node.body.length; i++) {
         var bodyNode = node.body[i];
         if (t.isImportDeclaration(bodyNode)) {
@@ -94,13 +93,10 @@ export var visitor = {
           rest.push(bodyNode);
         }
       }
-
       node.body = imports.concat(rest);
     },
-
     exit(node, parent, scope, file) {
       if (!file.transformers["es6.modules"].canTransform()) return;
-
       if (file.moduleFormatter.setup) {
         file.moduleFormatter.setup();
       }

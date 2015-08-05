@@ -122,7 +122,7 @@ export var visitor = {
     if (!state.deopted && !state.references.length) {
       // we only have shorthands and there are no other references
       if (state.candidates.length) {
-        for (var candidate of (state.candidates: Array)) {
+        for (var candidate of state.candidates) {
           candidate.replaceWith(argsId);
           optimiseMemberExpression(candidate.parent, state.offset);
         }

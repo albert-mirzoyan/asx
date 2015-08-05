@@ -292,33 +292,36 @@ Module.define('asx/test/config',{
     });
     ʃᵐ(function myField(){});
     ƒᵐ(function myMethod(){});
-    ʈᵐ(function MyClassᶜ(){with(this){
+    ƒᶜ(function MyClassᶜ(){with(this){
         ʈⁱ(function MyClass(){
 
         },[
-            function ᵗʸᵖᵉ   (){
+            ƒᵗ(function(){
 
-            },
-            function ᵃʳᵍˢ   (){
+            }),
+            ƒᵖ(function(){
+                return [
+                    ƒᴬ('some',1,ƒᵀ(Array,String),function(){return some;}),
+                    ƒᴬ('other',0,ƒᵀ(Array,String),function(){return some;})
+                ]
+            }),
+            ƒᵈ(function(){
 
-            },
-            function ᵈᵉᶜᵒʳˢ (){
-
-            }
+            })
         ]);
         ʃⁱ(function myField(){},[
-            function ᵗʸᵖᵉ   (){
+            ƒᵗ(function(){
+                return ƒᵀ(Array,String);
+            }),
+            ƒᵈ(function(){
+                return [expresion('param')]
+            }),
+            ƒᵍ(function(){
 
-            },
-            function ᵈᵉᶜᵒʳˢ (){
+            }),
+            ƒˢ(function(){
 
-            },
-            function ᵍᵉᵗᵗᵉʳ (){
-
-            },
-            function ˢᵉᵗᵗᵉʳ (){
-
-            }
+            })
         ]);
         ƒⁱ(function myMethod(){
 

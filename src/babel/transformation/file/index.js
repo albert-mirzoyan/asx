@@ -1,4 +1,4 @@
-import { validateOption, normaliseOptions, config as optionsConfig } from "./options";
+import { validateOption, normaliseOptions, config as optionsConfig } from "./options/index";
 import convertSourceMap from "convert-source-map";
 import moduleFormatters from "../modules";
 import PluginManager from "./plugin-manager";
@@ -8,7 +8,7 @@ import isFunction from "lodash/lang/isFunction";
 import isAbsolute from "path-is-absolute";
 import resolveRc from "./options/resolve-rc";
 import sourceMap from "source-map";
-import generate from "../../generation";
+import generate from "../../generation/index";
 import codeFrame from "../../helpers/code-frame";
 import defaults from "lodash/object/defaults";
 import includes from "lodash/collection/includes";
@@ -101,6 +101,10 @@ export default class File {
   static options = optionsConfig;
 
   normaliseOptions(opts: Object) {
+    if(opts.project){
+      this.project = opts.project;
+      delete opts.project;
+    }
     opts = this.opts = normaliseOptions(assign({}, opts));
 
     // resolve babelrc
@@ -245,8 +249,8 @@ export default class File {
     this.uncollapsedTransformerStack = stack = stack.concat(secondaryStack);
 
     // build dependency graph
-    for (let pass of (stack: Array)) {
-      for (var dep of (pass.plugin.dependencies: Array)) {
+    for (let pass of stack) {
+      for (var dep of pass.plugin.dependencies) {
         this.transformerDependencies[dep] = pass.key;
       }
     }
@@ -259,7 +263,7 @@ export default class File {
     var stack  = [];
     var ignore = [];
 
-    for (let pass of (_stack: Array)) {
+    for (let pass of _stack) {
       // been merged
       if (ignore.indexOf(pass) >= 0) continue;
 
@@ -272,7 +276,7 @@ export default class File {
       }
 
       var mergeStack = [];
-      for (let pass of (_stack: Array)) {
+      for (let pass of _stack) {
         if (pass.plugin.metadata.group === group) {
           mergeStack.push(pass);
           ignore.push(pass);
@@ -280,7 +284,7 @@ export default class File {
       }
 
       var visitors = [];
-      for (let pass of (mergeStack: Array)) {
+      for (let pass of mergeStack) {
         visitors.push(pass.plugin.visitor);
       }
       var visitor = traverse.visitors.merge(visitors);
@@ -491,6 +495,7 @@ export default class File {
     parseOpts.sourceType = "module";
 
     this.log.debug("Parse start");
+      console.info(parseOpts);
     var tree = parse(code, parseOpts);
     this.log.debug("Parse stop");
     return tree;
@@ -523,7 +528,7 @@ export default class File {
 
   transform() {
     this.call("pre");
-    for (var pass of (this.transformerStack: Array)) {
+    for (var pass of this.transformerStack) {
       pass.transform();
     }
     this.call("post");
@@ -585,7 +590,7 @@ export default class File {
   }
 
   call(key: string) {
-    for (var pass of (this.uncollapsedTransformerStack: Array)) {
+    for (var pass of this.uncollapsedTransformerStack) {
       var fn = pass.plugin[key];
       if (fn) fn(this);
     }
@@ -613,7 +618,12 @@ export default class File {
     }
   }
 
-  makeResult({ code, map = null, ast, ignored }) {
+  makeResult(args) {
+    var code = args.code,
+        map = args.map,
+        ast = args.ast,
+        ignored = args.ignored;
+
     var result = {
       metadata: null,
       ignored:  !!ignored,
@@ -643,7 +653,9 @@ export default class File {
     var ast  = this.ast;
 
     var result = { ast };
-    if (!opts.code) return this.makeResult(result);
+    if (!opts.code){
+      return this.makeResult(result);
+    }
 
     this.log.debug("Generation start");
 

@@ -121,7 +121,12 @@ pp.parseDecorators = function(allowExport) {
     return;
   }
 
-  if (this.type !== tt._class) {
+  if (
+      this.type !== tt._class &&
+      this.type !== tt._var &&
+      this.type !== tt._function
+  ) {
+
     this.raise(this.start, "Leading decorators must be attached to a class declaration");
   }
 }
@@ -652,9 +657,15 @@ pp.shouldParseExportDeclaration = function() {
 
 pp.checkExport = function(node) {
   if (this.decorators.length) {
-    var isClass = node.declaration && (node.declaration.type === "ClassDeclaration" || node.declaration.type === "ClassExpression")
-    if (!node.declaration || !isClass) {
-      this.raise(node.start, "You can only use decorators on an export when exporting a class");
+    var isValid = node.declaration && (
+        node.declaration.type === "ClassDeclaration" ||
+        node.declaration.type === "ClassExpression" ||
+        node.declaration.type === "FunctionDeclaration" ||
+        node.declaration.type === "VariableDeclaration"
+    );
+    if (!node.declaration || !isValid) {
+      console.info(node.declaration.type);
+      this.raise(node.start, "You can only use decorators on an export when exporting a class,variable or function");
     }
     this.takeDecorators(node.declaration)
   }

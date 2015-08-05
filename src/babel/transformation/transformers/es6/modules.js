@@ -11,7 +11,6 @@ function keepBlockHoist(node, nodes) {
 export var metadata = {
   group: "builtin-modules"
 };
-
 export var visitor = {
   ImportDeclaration(node, parent, scope, file) {
     // flow type
@@ -20,7 +19,7 @@ export var visitor = {
     var nodes = [];
 
     if (node.specifiers.length) {
-      for (var specifier of (node.specifiers: Array)) {
+      for (var specifier of node.specifiers) {
         file.moduleFormatter.importSpecifier(specifier, node, nodes, scope);
       }
     } else {
@@ -34,21 +33,18 @@ export var visitor = {
 
     return nodes;
   },
-
   ExportAllDeclaration(node, parent, scope, file) {
     var nodes = [];
     file.moduleFormatter.exportAllDeclaration(node, nodes, scope);
     keepBlockHoist(node, nodes);
     return nodes;
   },
-
   ExportDefaultDeclaration(node, parent, scope, file) {
     var nodes = [];
     file.moduleFormatter.exportDeclaration(node, nodes, scope);
     keepBlockHoist(node, nodes);
     return nodes;
   },
-
   ExportNamedDeclaration(node, parent, scope, file) {
     // flow type
     if (this.get("declaration").isTypeAlias()) return;

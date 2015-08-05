@@ -1,5 +1,6 @@
 import FS from 'fs';
 import PATH from 'path';
+export default Files;
 
 export class Files {
   static resolve(...args){

@@ -26,7 +26,8 @@ var visitor = {
     if (t.isTryStatement(parent)) {
       if (node === parent.block) {
         this.skip();
-      } else if (parent.finalizer && node !== parent.finalizer) {
+      } else
+      if (parent.finalizer && node !== parent.finalizer) {
         this.skip();
       }
     }
@@ -196,7 +197,7 @@ class TailCallTransformer {
     var topVars = [];
 
     if (this.needsThis) {
-      for (var path of (this.thisPaths: Array)) {
+      for (var path of this.thisPaths) {
         path.replaceWith(this.getThisId());
       }
 
@@ -204,7 +205,7 @@ class TailCallTransformer {
     }
 
     if (this.needsArguments || this.setsArguments) {
-      for (let path of (this.argumentsPaths: Array)) {
+      for (let path of this.argumentsPaths) {
         path.replaceWith(this.argumentsId);
       }
 
@@ -363,7 +364,7 @@ class TailCallTransformer {
       }
 
       if (!this.needsArguments) {
-        for (let elem of (elems: Array)) {
+        for (let elem of elems) {
           body.push(t.expressionStatement(elem));
         }
       }

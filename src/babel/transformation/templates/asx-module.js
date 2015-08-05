@@ -1,6 +1,5 @@
-Asx.define(MODULE_NAME,function(module){
-  with(this){
-    return MODULE_BODY;
+ƒ(function MODULE_NAME(Ʃ){
+  with(Ʃ){
+    MODULE_BODY
   }
 });
-

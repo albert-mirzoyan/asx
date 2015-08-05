@@ -1,17 +1,11 @@
-μ(function asxˏtestˏconfigꓸjs(Ʃ){with(this){
+ƒ(function asxˏtestˏconfigꓸjs(Ʃ){with(this){
     ʃꜜ({
-        asx    : {
-            testˏsimpleˑtestꓸjs:{
+        asxˏtestˏsimpleˑtestꓸjs:{
 
-            }
         }
     });
     ʃꜛ({
-        asx    : {
-            testˏsimpleˑtestꓸjs:{
-
-            }
-        }
+        asxˏtestˏsimpleˑtestꓸjs: {}
     });
     ƒᵉ(function (){
 
@@ -129,18 +123,4 @@
         ]);
     }});
 }});
-
-
-
-
-
-
-// μ   - define module
-// ʃꜜ  - import
-// ʃꜛ  - export
-// ʃᵈ  - export default
-// ʃᵉ  - execute module
-// ʃᵐ  - define module variable
-// ƒᵐ  - define module function
-// ʈᵐ  - define module class
 

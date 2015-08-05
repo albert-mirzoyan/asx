@@ -266,4 +266,5 @@
     return Module.get(name).initialize(def);
   }
   return new Runtime();
-})();
+})()
+

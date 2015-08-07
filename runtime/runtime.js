@@ -1,80 +1,196 @@
-function convertClassDefinition(def){
-    var SC = def[':constructor'];
-    var IC = def['.constructor'];
-    delete def[':constructor'];
-    delete def['.constructor'];
-    var clazz = new Class(IC.F);
-    Object.keys(def).forEach(key=>convertClassMember(key,def));
-    if (IC.E) {
-        clazz.extend(IC.E);
+function inherits(child, parent) {
+    if (typeof parent !== 'function' && parent !== null) {
+        throw new TypeError('Super expression must either be null or a function, not ' + typeof parent);
     }
+    child.prototype = Object.create(parent && parent.prototype, {
+        constructor: {
+            value           : child,
+            enumerable      : false,
+            writable        : true,
+            configurable    : true
+        }
+    });
+    if (parent) {
+        child.__proto__ = parent;
+    }
+}
+function convertClass(def){
+    var clazz = null;
+    def(def=>{
+        var SC = convertClassMember(':constructor',def);
+        var IC = convertClassMember('.constructor',def);
+        clazz = IC.value;
+        Object.defineProperty(clazz,'class',{
+            value : Object.create(Class.prototype,{
+                '.constructor'      : {
+                    value           : IC
+                },
+                constructor         : {
+                    value           : Class
+                }
+            })
+        });
+
+        if(IC.parent){
+            clazz.class.setParent(IC.parent);
+        }else{
+            clazz.__proto__=Object.create(null);
+        }
+        Object.keys(def).forEach(key=>{
+            clazz.class.set(convertClassMember(key,def))
+        });
+    });
     return clazz;
 }
 function convertClassMember(key,def){
     var member = def[key];
-    member.name = key.substring(1);
-    member.static = key[0] == ':';
-    if (member.F) {
-        member.kind = 'method';
-        member.value = member.F;
-        delete member.F;
-    } else {
-        member.kind = 'field';
-        member.value = member.V;
-        delete member.V;
+    if(member){
+        member.name = key.substring(1);
+        member.static = key[0] == ':';
+        if (member.F) {
+            member.kind = 'method';
+            member.value = member.F;
+            if(member.P){
+                member.parameters = convertMethodParameters(member.P);
+                delete member.P;
+            }
+            if (member.E) {
+                member.parent = member.E;
+                delete member.E;
+            }
+            delete member.F;
+        } else {
+            member.kind = 'field';
+            member.value = member.V;
+            delete member.V;
+        }
+        if (member.T) {
+            member.type = convertType(member.T);
+            delete member.T;
+        }
+        if (member.A) {
+            member.decorators = member.A;
+            delete member.A;
+        }
+        member.__proto__=null;
     }
-    if (member.T) {
-        member.type = Type.get(member.T);
-        delete member.T;
-    }
-    console.info(member);
+    delete def[key];
+    return member;
 }
-class Type {
-    static get(type){
-        return new Type(type)
-    }
-    constructor(type){
-        if(typeof type=='function'){
-            this.value = type;
-        }else
-        if(Array.isArray(type)){
-            this.value = type.shift();
-            if(type.length){
-                this.params = type.filter(r=>Type.get(r));
+function convertMethodParameters(params){
+    var ret = Object.create(null);
+    Object.keys(params).forEach(k=>{
+        Object.defineProperty(ret,k,{
+            value : convertMethodParameter(params[k])
+        })
+    });
+    return ret;
+}
+function convertMethodParameter(param){
+    var ret = Object.create(null);
+    Object.defineProperty(ret,'type',{
+        value : convertType(param)
+    });
+    return ret;
+}
+function convertType(type){
+    var ret = Object.create(null);
+    if(typeof type=='function'){
+        Object.defineProperty(ret,'value',{value:type})
+    }else
+    if(Array.isArray(type)){
+        Object.defineProperty(ret,'value',{value:type.shift()});
+        if(type.length){
+            if(type.length>1){
+                Object.defineProperty(ret,'params',{
+                    value : type.map(r=>convertType(r))
+                });
+            }else{
+                Object.defineProperty(ret,'param',{
+                    value : convertType(type.shift())
+                });
             }
         }
     }
+    if(ret.params || ret.param){
+        return ret;
+    }else{
+        return ret.value;
+    }
 }
+
 class Class {
-    static define(def) {
-        var clazz = null;
-        def(def=>clazz=convertClassDefinition(def));
-        console.info(clazz);
-        return clazz.mirror;
+
+    set(member){
+        switch(member.kind){
+            case 'method'   : this.setMethod(member); break;
+            case 'field'    : this.setField(member); break;
+        }
     }
-
-    mirror:Function;
-    parent:Function;
-
-    constructor(mirror) {
-        Object.defineProperty(this, 'mirror', {
-            value: mirror
+    setParent(parent){
+        inherits(this.getConstructor(),parent);
+    }
+    setMethod(method){
+        this.setMember(method.static,method.name,{
+            configurable    : true,
+            enumerable      : true,
+            get             : function(){
+                return Object.defineProperty(this,method.name,{
+                    configurable    : true,
+                    writable        : true,
+                    enumerable      : true,
+                    value           : method.value.bind(this)
+                })[method.name]
+            },
+            set             : function(v){
+                return Object.defineProperty(this,method.name,{
+                    value           : v.bind(this)
+                })
+            }
         });
-        Object.defineProperty(mirror, 'class', {
-            value: this
-        })
     }
-
-    extend(parent) {
-        Object.defineProperty(this, 'parent', {
-            configurable: true,
-            value: parent
+    setField(field){
+        this.setMember(field.static,field.name,{
+            configurable    : true,
+            enumerable      : true,
+            get             : function(){
+                return Object.defineProperty(this,field.name,{
+                    configurable    : true,
+                    writable        : true,
+                    enumerable      : true,
+                    value           : field.value()
+                })[field.name]
+            },
+            set             : function(v){
+                return Object.defineProperty(this,field.name,{
+                    value           : v
+                })
+            }
         });
     }
+    setMember(slot,name,descriptor){
+        Object.defineProperty(slot ?
+            this.getConstructor():
+            this.getPrototype(),
+            name,descriptor
+        );
+    }
 
-    member(member) {
-        var name = member.name;
-        var name = member.name;
+    get(filter){
+
+    }
+    getSlot(member){
+        if(member.static){
+            return this.getConstructor();
+        }else{
+            return this.getPrototype();
+        }
+    }
+    getPrototype(){
+        return this.getConstructor().prototype;
+    }
+    getConstructor(){
+        return this['.constructor'].value;
     }
 }
 class Module {
@@ -104,6 +220,7 @@ class Module {
 
     constructor(id) {
         this.id = id;
+        this.exports = Object.create(null);
     }
 
     initialize() {
@@ -149,25 +266,35 @@ class Module {
     }
 
     class(name, definer) {
+        var exports = this.exports;
         Object.defineProperty(this.scope, name, {
             configurable: true,
             get: function () {
-                return Object.defineProperty(this, name, {
-                    value: Class.define(definer)
-                })[name];
+                delete this[name];
+                Object.defineProperty(this, name, {
+                    value: convertClass(definer)
+                });
+                var exported = Object.getOwnPropertyDescriptor(exports,name);
+                if(exported){
+                    Object.defineProperty(exports, name, {
+                        value: this[name]
+                    });
+                }
+                return this[name];
             }
         })
     }
 
     export(definer) {
-        this.exports = {};
+
         for (var name in definer) {
             Object.defineProperty(this.exports, name, {
                 configurable: true,
                 get: function () {
-                    return Object.defineProperty(this, name, {
+                    Object.defineProperty(this, name, {
                         value: definer[name]()
-                    })[name];
+                    });
+                    return this[name];
                 }
             })
         }
@@ -320,7 +447,7 @@ class Runtime {
         if (this.executable) {
             Module.get(this.executable).then(module=> {
                 console.info(module.exports);
-                console.info(module.exports['#']);
+                console.info(module.exports.default);
             });
         }
     }

@@ -226,7 +226,7 @@ export default class AsxFormatter extends DefaultFormatter {
         imp['*'] = specifier.local.name;
       break;
       case 'ImportDefaultSpecifier' :
-        imp['#'] = specifier.local.name;
+        imp['default'] = specifier.local.name;
       break;
       case 'ImportSpecifier' :
         var imported = specifier.imported.name;
@@ -247,7 +247,7 @@ export default class AsxFormatter extends DefaultFormatter {
     switch(node.type){
       case 'ExportDefaultDeclaration' :
         var exp = this.getExport();
-        exp['#'] = node.declaration;
+        exp['default'] = node.declaration;
     }
     //JSON.ast_print(node);
   }

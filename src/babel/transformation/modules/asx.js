@@ -135,19 +135,30 @@ export default class AsxFormatter extends DefaultFormatter {
           var val = exports[key];
           if(typeof val=='string') {
             ret.push(t.property('init',
-              t.literal(key), t.identifier(val == '*' ? key : val)
+              t.identifier(key),
+              t.functionExpression(null,[],t.blockStatement([
+                t.returnStatement(t.identifier(val == '*' ? key : val))
+              ]))
             ))
           }else{
             ret.push(t.property('init',
-              t.literal(key), val
-            ))
+              t.identifier(key),
+              t.functionExpression(null,[],t.blockStatement([
+                t.returnStatement(val)
+              ])))
+            );
           }
         });
-        body.push(t.returnStatement(
-          t.objectExpression(ret)
-        ));
+
+        body.push(t.expressionStatement(t.callExpression(t.memberExpression(
+            t.identifier('__'),
+            t.identifier('export')),
+            [t.objectExpression(ret)]
+        )));
       }
-      var initializer  = t.functionExpression(null, [t.identifier('asx')], t.blockStatement(body));
+      var initializer  = t.functionExpression(null, [t.identifier('__')], t.blockStatement([
+          t.withStatement(t.identifier('this'), t.blockStatement(body))
+      ]));
       definer.push(t.property('init',
         t.identifier('execute'),
         initializer
@@ -167,7 +178,7 @@ export default class AsxFormatter extends DefaultFormatter {
         ))
       }
 
-    })
+    });
     definer = t.objectExpression(definer);
 
 

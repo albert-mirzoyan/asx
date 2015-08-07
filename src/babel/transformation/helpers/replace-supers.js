@@ -152,7 +152,7 @@ export default class ReplaceSupers {
       var superVar = t.identifier('_super');
       var superVars = [t.identifier('this')];
       var superCall = t.callExpression(t.memberExpression(
-        t.identifier('_class'),
+        t.identifier('__'),
         t.identifier('supers')
       ),superVars);
       path.scope.path.setData('_super',superVars);
@@ -188,15 +188,15 @@ export default class ReplaceSupers {
         this.addSuper(path,path.parent.property.name);
       } else
       if(t.isCallExpression(path.parent)){
-        if(methodName.name!='constructor'){
+        if(this.methodNode.kind!='constructor'){
           this.addSuper(path,methodName.name);
           return t.memberExpression(t.identifier('_super'),methodName)
         }else{
-          var c = path.parentPath.parentPath.node
+          var c = path.parentPath.parentPath.node;
           var s = path.parentPath.parentPath.parentPath.node
           s.body.splice(s.body.indexOf(c)+1,0,t.expressionStatement(
             t.callExpression(
-              t.memberExpression(t.identifier('_class'),t.identifier('defaults')),
+              t.memberExpression(t.identifier('__'),t.identifier('defaults')),
               [getThisReference()]
             )
           ))

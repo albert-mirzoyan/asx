@@ -6,7 +6,7 @@ class Compiler {
   static load(conf){
     var config,path = conf;
     if(Files.isDirectory(path)){
-      path = Files.resolve(path,'./index.json');
+      path = Files.resolve(path,'./package.json');
     }
     if(!Files.isFile(path)){
       throw new Error(`Invalid Project Path '${conf}' '${path}'`);
@@ -36,7 +36,7 @@ class Compiler {
     }
 
     config.outDir = Files.resolve(out);
-    config.outPath = Files.resolve(out,config.group,config.project);
+    config.outPath = Files.resolve(out,config.project);
 
     return new Compiler(config);
   }
@@ -122,7 +122,7 @@ class Compiler {
     resources.forEach(file=>{
       Files.copyFile(file.file,Files.resolve(out,file.path));
     });
-    Files.writeFile(Files.resolve(out,'project.json'),JSON.stringify(this.config,null,'  '));
+    Files.writeFile(Files.resolve(out,'package.json'),JSON.stringify(this.config,null,'  '));
     if(watch){
       this.watch();
     }

@@ -10,9 +10,7 @@ export class Project {
     this.sources = sources;
     this.dependencies={}
   }
-
   compile(){
-
     this.sources.forEach(s=>this.compileSource(s));
     Object.keys(this.dependencies).forEach(k=>{
       var v = this.dependencies[k];
@@ -25,7 +23,7 @@ export class Project {
          return f;
         }
       })
-    })
+    });
     return this;
   }
 
@@ -37,7 +35,6 @@ export class Project {
         filename : file.path,
         //sourceMap: 'inline',
         moduleId : [
-          this.config.group,
           this.config.project,
           file.name
         ].join('/'),

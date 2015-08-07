@@ -1,6 +1,2 @@
-Module.define(MODULE_NAME,function(module){
-  with(this){
-    return MODULE_BODY;
-  }
-});
+Module.define(MODULE_NAME,MODULE_BODY);
 

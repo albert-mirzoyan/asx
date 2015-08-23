@@ -44,5 +44,11 @@ export function Scopable(node, parent, scope, file) {
 }
 
 export function VariableDeclaration(node) {
-  if (node.kind === "const") node.kind = "let";
+  if (node.kind === "const") {
+    node.kind = "let";
+    node._const = true;
+  }else{
+    node._const = false;
+  }
 }
+

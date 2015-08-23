@@ -23,7 +23,12 @@
   "BlockStatement": {
     "body": null
   },
-
+  "ClassProperty": {
+    "key":null,
+    "value":null,
+    "typeAnnotation":null,
+    "decorators":null
+  },
   "CallExpression": {
     "callee": null,
     "arguments": null
@@ -38,7 +43,9 @@
   "ExpressionStatement": {
     "expression": null
   },
-
+  "Decorator": {
+    "expression": null
+  },
   "File": {
     "program": null,
     "comments": null,

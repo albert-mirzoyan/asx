@@ -29,11 +29,15 @@ export default class Buffer {
   }
 
   indent() {
-    this._indent++;
+    if (!(this.format.compact || this.format.concise)) {
+      this._indent++;
+    }
   }
 
   dedent() {
-    this._indent--;
+    if (!(this.format.compact || this.format.concise)) {
+      this._indent--;
+    }
   }
 
   semicolon() {
@@ -43,7 +47,10 @@ export default class Buffer {
   ensureSemicolon() {
     if (!this.isLast(";")) this.semicolon();
   }
-
+  leftBrace() {
+    this.push("{");
+    this.newline(true);
+  }
   rightBrace() {
     this.newline(true);
     this.push("}");

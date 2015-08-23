@@ -253,7 +253,7 @@ export function valueToNode(value: any): Object {
     var props = [];
     for (var key in value) {
       var nodeKey;
-      if (t.isValidIdentifier(key)) {
+      if (t.isValidPropertyName(key)) {
         nodeKey = t.identifier(key);
       } else {
         nodeKey = t.literal(key);

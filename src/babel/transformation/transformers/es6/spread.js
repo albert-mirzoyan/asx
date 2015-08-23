@@ -86,7 +86,9 @@ export function CallExpression(node, parent, scope) {
   var callee = node.callee;
 
   if (this.get("callee").isMemberExpression()) {
-    var temp = scope.generateMemoisedReference(callee.object);
+    console.info(callee);
+    var temp = scope.generateUidIdentifier('s');
+    scope.push({id:temp});
     if (temp) {
       callee.object = t.assignmentExpression("=", temp, callee.object);
       contextLiteral = temp;

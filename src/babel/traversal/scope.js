@@ -53,7 +53,7 @@ var programReferenceVisitor = explode({
     if (t.isClassDeclaration(declar) || t.isFunctionDeclaration(declar)) {
       scope.getBinding(declar.id.name).reference();
     } else if (t.isVariableDeclaration(declar)) {
-      for (var decl of (declar.declarations: Array)) {
+      for (var decl of declar.declarations) {
         scope.getBinding(decl.id.name).reference();
       }
     }
@@ -93,7 +93,7 @@ var renameVisitor = explode({
     if (node.name !== state.oldName) return;
 
     if (this.parentPath.isProperty() && this.key === "key" && parent.shorthand) {
-      var value = t.identifier(state.newName);;
+      var value = t.identifier(state.newName);
 
       if (parent.value === state.binding) {
         state.info.identifier = state.binding = value;
@@ -116,14 +116,14 @@ var renameVisitor = explode({
 
     if (this.isExportDeclaration() && this.has("specifiers")) {
       var specifiers = this.get("specifiers");
-      for (var specifier of (specifiers: Array)) {
+      for (var specifier of specifiers) {
         if (specifier.isExportSpecifier() && matchesLocal(specifier.node, "exported")) {
           specifier.get("exported").replaceWith(t.identifier(state.oldName));
         }
       }
     } else if (this.isImportDeclaration() && this.has("specifiers")) {
       var specifiers = this.get("specifiers");
-      for (var specifier of (specifiers: Array)) {
+      for (var specifier of specifiers) {
         if (specifier.isImportSpecifier() && matchesLocal(specifier.node, "imported")) {
           state.binding = state.info.identifier = t.identifier(state.newName);
           specifier.get("local").replaceWith(state.binding);
@@ -642,6 +642,7 @@ export default class Scope {
 
     if (!declar) {
       declar = t.variableDeclaration(opts.kind || "var", []);
+      //declar._compact = true;
       declar._generated = true;
       declar._blockHoist = 2;
 
@@ -650,8 +651,12 @@ export default class Scope {
       path.get("body")[0]._containerInsertBefore([declar]);
       if (!unique) path.setData(dataKey, declar);
     }
+    if(opts.init){
+      declar.declarations.push(t.variableDeclarator(opts.id, opts.init));
+    }else{
+      declar.declarations.unshift(t.variableDeclarator(opts.id));
+    }
 
-    declar.declarations.push(t.variableDeclarator(opts.id, opts.init));
   }
 
   /**

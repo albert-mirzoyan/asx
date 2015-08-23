@@ -2,100 +2,80 @@ import callDelegate from "../../helpers/call-delegate";
 import * as util from  "../../../util";
 import traverse from  "../../../traversal";
 import * as t from "../../../types";
-
+export var metadata = {
+    group: "builtin-pre"
+};
 export function shouldVisit(node) {
-  return t.isFunction(node) && hasDefaults(node);
+    return t.isFunction(node);
 }
 
-var hasDefaults = function (node) {
-  for (var i = 0; i < node.params.length; i++) {
-    if (!t.isIdentifier(node.params[i])) return true;
-  }
-  return false;
+exports.Super = function (node, parent, scope, file) {
+    var path = scope.path;
+    var id = path.getData('_super');
+    if(!id){
+
+        id = t.identifier('_super');
+        scope.push({id:id,init:t.memberExpression(
+            t.identifier('_local'),t.identifier('super')
+        )});
+        path.setData('_super',id);
+        return id;
+    }
+    return id;
 };
-
-var iifeVisitor = traverse.explode({
-  ReferencedIdentifier(node, parent, scope, state) {
-    if (!state.scope.hasOwnBinding(node.name)) return;
-    if (state.scope.bindingIdentifierEquals(node.name, node)) return;
-
-    state.iife = true;
-    this.stop();
-  }
-});
-
 exports.Function = function (node, parent, scope, file) {
-  if (!hasDefaults(node)) return;
+    if (node.params) {
+        var rest = false,inits = {},argsInit = false;
+        node.params = node.params.map((param,id)=> {
+            var result = param;
+            switch (param.type) {
+                case 'AssignmentPattern':
+                    argsInit = true;
+                    inits[id] = param.right;
+                    result = param.left;
+                    result.init = param.right;
+                    result.isOptional = false;
+                    return param.left;
+                    break;
+                case 'RestElement':
+                    argsInit = true;
+                    rest = true;
+                    result = param.argument;
+                    result.isRest = true;
+                    result.typeAnnotation = param.typeAnnotation;
+                    break;
+            }
+            return result;
+        });
 
-  t.ensureBlock(node);
+        if(argsInit){
+            var args = [
+                t.thisExpression(),
+                t.identifier('arguments')
+            ];
 
-  var body = [];
+            if(
+                !this.parentPath.isProgram() &&
+                !this.parentPath.isMethodDefinition()
+            ){
+                args.push(t.literal(rest));
+                var p,o,keys=Object.keys(inits);
+                if(keys.length){
+                    p=Array(keys.length);
+                    keys.forEach(key=>{
+                        p.push(o=t.property('init',t.identifier('_'+key),inits[key]));
+                        o._compact = false;
+                    });
+                    p=t.objectExpression(p);
+                    p._compact = keys.length<=1;
+                    args.push(p);
+                }
+            }
+            var local = t.identifier('_local');
+            scope.push({id:local,init:t.callExpression(t.memberExpression(
+                t.identifier('__'),t.identifier('locals')
+            ),args)});
+        }
 
-  var argsIdentifier = t.identifier("arguments");
-  argsIdentifier._shadowedFunctionLiteral = true;
-
-  var lastNonDefaultParam = 0;
-
-  var state = { iife: false, scope: scope };
-
-  var pushDefNode = function (left, right, i) {
-    var defNode = util.template("default-parameter", {
-      VARIABLE_NAME: left,
-      DEFAULT_VALUE: right,
-      ARGUMENT_KEY:  t.literal(i),
-      ARGUMENTS:     argsIdentifier
-    }, true);
-    defNode._blockHoist = node.params.length - i;
-    body.push(defNode);
-  };
-
-  var params = this.get("params");
-  for (var i = 0; i < params.length; i++) {
-    var param = params[i];
-
-    if (!param.isAssignmentPattern()) {
-      if (!param.isRestElement()) {
-        lastNonDefaultParam = i + 1;
-      }
-
-      if (!param.isIdentifier()) {
-        param.traverse(iifeVisitor, state);
-      }
-
-      if (file.transformers["es6.spec.blockScoping"].canTransform() && param.isIdentifier()) {
-        pushDefNode(param.node, t.identifier("undefined"), i);
-      }
-
-      continue;
     }
-
-    var left  = param.get("left");
-    var right = param.get("right");
-
-    var placeholder = scope.generateUidIdentifier("x");
-    placeholder._isDefaultPlaceholder = true;
-    node.params[i] = placeholder;
-
-    if (!state.iife) {
-      if (right.isIdentifier() && scope.hasOwnBinding(right.node.name)) {
-        state.iife = true;
-      } else {
-        right.traverse(iifeVisitor, state);
-      }
-    }
-
-    pushDefNode(left.node, right.node, i);
-  }
-
-  // we need to cut off all trailing default parameters
-  node.params = node.params.slice(0, lastNonDefaultParam);
-
-  if (state.iife) {
-    body.push(callDelegate(node, scope));
-    node.body = t.blockStatement(body);
-  } else {
-    node.body.body = body.concat(node.body.body);
-  }
-
-  this.checkSelf();
 };

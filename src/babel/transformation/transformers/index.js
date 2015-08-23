@@ -14,7 +14,7 @@ export default {
   "es7.asyncFunctions":                    require("./es7/async-functions"),
   "es7.decorators":                        require("./es7/decorators"),
 
-  strict:                                  require("./other/strict"),
+  //strict:                                  require("./other/strict"),
 
   _validation:                             require("./internal/validation"),
 
@@ -37,14 +37,15 @@ export default {
   // needs to be before `regenerator` due to generator comprehensions
   // needs to be before `_shadowFunctions`
   "es7.comprehensions":                    require("./es7/comprehensions"),
-
+  // needs to be before `es6.blockScoping` as default parameters have a TDZ
+  "es6.parameters.default":                require("./es6/parameters.default"),
   "es6.classes":                           require("./es6/classes"),
 
   asyncToGenerator:                        require("./other/async-to-generator"),
   bluebirdCoroutines:                      require("./other/bluebird-coroutines"),
 
-  "es6.objectSuper":                       require("./es6/object-super"),
-  "es7.objectRestSpread":                  require("./es7/object-rest-spread"),
+  //"es6.objectSuper":                       require("./es6/object-super"),
+  //"es7.objectRestSpread":                  require("./es7/object-rest-spread"),
   "es7.exponentiationOperator":            require("./es7/exponentiation-operator"),
 
   "es6.spec.templateLiterals":             require("./es6/spec.template-literals"),
@@ -65,16 +66,15 @@ export default {
   "es6.constants":                         require("./es6/constants"),
 
   // needs to be before `es6.parameters.default` as default parameters will destroy the rest param
-  "es6.parameters.rest":                   require("./es6/parameters.rest"),
+  //"es6.parameters.rest":                   require("./es6/parameters.rest"),
 
   // needs to be after `es6.parameters.rest` as we use `toArray` and avoid turning an already known array into one
   "es6.spread":                            require("./es6/spread"),
 
-  // needs to be before `es6.blockScoping` as default parameters have a TDZ
-  "es6.parameters.default":                require("./es6/parameters.default"),
+
 
   // needs to be before `es6.blockScoping` as let variables may be produced
-  "es6.destructuring":                     require("./es6/destructuring"),
+  //"es6.destructuring":                     require("./es6/destructuring"),
 
   // needs to be before `_shadowFunctions` due to block scopes sometimes being wrapped in a
   // closure
@@ -110,7 +110,7 @@ export default {
   ludicrous:                               require("./other/ludicrous"),
   "spec.undefinedToVoid":                  require("./spec/undefined-to-void"),
 
-  _strict:                                 require("./internal/strict"),
+  //_strict:                                 require("./internal/strict"),
   _moduleFormatter:                        require("./internal/module-formatter"),
 
   "es3.propertyLiterals":                  require("./es3/property-literals"),

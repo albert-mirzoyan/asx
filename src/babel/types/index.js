@@ -128,7 +128,7 @@ each(t.BUILDER_KEYS, function (keys, type) {
       if (arg === undefined) arg = keys[key];
       node[key] = arg;
     }
-
+    node._generated = true;
     return node;
   };
 });

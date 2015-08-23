@@ -14,9 +14,10 @@ var functionChildrenVisitor = {
 
     var getId;
 
-    if (this.isIdentifier() && node.name === "arguments") {
+    if (this.isIdentifier() && node.name === "arguments" && !node._generated) {
       getId = state.getArgumentsId;
-    } else if (this.isThisExpression()) {
+    } else
+    if (this.isThisExpression()) {
       getId = state.getThisId;
     } else {
       return;

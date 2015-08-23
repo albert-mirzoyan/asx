@@ -6,7 +6,7 @@ export NODE_ENV = test
 .PHONY: clean build bootstrap build-core clean-core
 
 watch-runtime:
-	node $(BABEL_CMD) --modules umd -w runtime --out-dir repository/out --copy-files
+	node $(BABEL_CMD) --copy-files --blacklist strict --modules=umd -w --out-dir repository/out runtime
 watch-core:
 	node $(BABEL_CMD) -w src --out-dir lib --copy-files
 build-core: clean-core

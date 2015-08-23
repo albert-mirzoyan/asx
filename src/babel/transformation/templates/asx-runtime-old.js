@@ -6,7 +6,7 @@ Object.defineProperty(global, "E56", {
     uid               : function uid(target,uuid){
       if(!(this instanceof E56.uid)){
         if(arguments.callee === E56.uid){
-          return new E56.uid(target,Math.floor(Math.random()*Number.MAX_SAFE_INTEGER));
+          return new E56.uid(target,Math.floor(Math.random()*Number.MAX_INT));
         }else{
           return new E56.uid(target,uuid);
         }

@@ -166,13 +166,17 @@ class CodeGenerator {
   print(node, parent, opts = {}) {
     if (!node) return;
 
-    if (parent && parent._compact) {
-      node._compact = true;
+    if(!node.hasOwnProperty('_compact')) {
+      if (parent && parent._compact) {
+        node._compact = true;
+      }
     }
 
     var oldConcise = this.format.concise;
     if (node._compact) {
       this.format.concise = true;
+    }else{
+      this.format.concise = false;
     }
 
     var newline = (leading) => {
@@ -247,7 +251,9 @@ class CodeGenerator {
 
     var len = nodes.length;
 
-    if (opts.indent) this.indent();
+    if (opts.indent) {
+      this.indent()
+    }
 
     each(nodes, (node, i) => {
       print(node, {
@@ -265,7 +271,9 @@ class CodeGenerator {
       });
     });
 
-    if (opts.indent) this.dedent();
+    if (opts.indent){
+      this.dedent();
+    }
   }
 
   printAndIndentOnComments(print, node) {

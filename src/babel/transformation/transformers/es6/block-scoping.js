@@ -8,8 +8,10 @@ import extend from "lodash/object/extend";
 function isLet(node, parent) {
   if (!t.isVariableDeclaration(node)) return false;
   if (node._let) return true;
-  if (node.kind !== "let") return false;
-
+  if (node.kind !== "let") {
+    node._let = false;
+    return false;
+  }
   // https://github.com/babel/babel/issues/255
   if (isLetInitable(node, parent)) {
     for (var i = 0; i < node.declarations.length; i++) {
@@ -17,7 +19,6 @@ function isLet(node, parent) {
       declar.init = declar.init || t.identifier("undefined");
     }
   }
-
   node._let = true;
   node.kind = "var";
   return true;

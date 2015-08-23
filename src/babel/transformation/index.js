@@ -4,7 +4,7 @@ var pipeline = new Pipeline;
 
 //
 
-import transformers from "./transformers";
+import transformers from "./transformers/index";
 pipeline.addTransformers(transformers);
 
 //

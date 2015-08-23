@@ -14,7 +14,8 @@ export function isReferenced(node: Object, parent: Object): boolean {
     case "MemberExpression":
       if (parent.property === node && parent.computed) {
         return true;
-      } else if (parent.object === node) {
+      } else
+      if (parent.object === node) {
         return true;
       } else {
         return false;
@@ -43,7 +44,7 @@ export function isReferenced(node: Object, parent: Object): boolean {
     case "ArrowFunctionExpression":
     case "FunctionDeclaration":
     case "FunctionExpression":
-      for (var param of (parent.params: Array)) {
+      for (var param of parent.params) {
         if (param === node) return false;
       }
 
@@ -105,7 +106,7 @@ export function isReferenced(node: Object, parent: Object): boolean {
  * Check if the input `node` is an `Identifier` and `isReferenced`.
  */
 
-export function isReferencedIdentifier(node: Object, parent: Object, opts?: Object): boolean {
+export function isReferencedIdentifier(node: Object, parent: Object, opts: Object): boolean {
   return (t.isIdentifier(node, opts) || t.isJSXIdentifier(node, opts)) && t.isReferenced(node, parent);
 }
 
@@ -117,6 +118,10 @@ export function isReferencedIdentifier(node: Object, parent: Object, opts?: Obje
 export function isValidIdentifier(name: string): boolean {
   if (!isString(name) || esutils.keyword.isReservedWordES6(name, true)) return false;
   return esutils.keyword.isIdentifierNameES6(name);
+}
+
+export function isValidPropertyName(name: string): boolean {
+   return name.match(/^[a-z_$][a-z0-9_$]*$/gi)
 }
 
 /**

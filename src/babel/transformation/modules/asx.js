@@ -4,264 +4,242 @@ import includes from "lodash/collection/includes";
 import values from "lodash/object/values";
 import * as util from  "../../util";
 import * as t from "../../types";
+import ast from "../../helpers/ast-utils";
 
 export default class AsxFormatter extends DefaultFormatter {
-  static options(ast){
-    var options = {};
-    if(ast.comments && ast.comments.length){
-      var comment = ast.comments.shift();
-      if(comment.type == 'Block'){
-        options = comment.value.match(/\*\s*@module\s+(\{[^}]*\})/g);
-        if(options){
-          options = options[0].split('\n').map(l=>{
-            return l.replace(/\s*\*(.*)/,'$1').trim()
-          });
-          options = options.join(' ').replace(/\s*\@module\s*/,'');
-          options = (new Function('return '+options+';'))();
+    static options(ast) {
+        var options = {};
+        if (ast.comments && ast.comments.length) {
+            var comment = ast.comments.shift();
+            if (comment.type == 'Block') {
+                options = comment.value.match(/\*\s*@module\s+(\{[^}]*\})/g);
+                if (options) {
+                    options = options[0].split('\n').map(l=> {
+                        return l.replace(/\s*\*(.*)/, '$1').trim()
+                    });
+                    options = options.join(' ').replace(/\s*\@module\s*/, '');
+                    options = (new Function('return ' + options + ';'))();
+                }
+            } else {
+                ast.comments.unshift(comment);
+            }
         }
-      }else{
-        ast.comments.unshift(comment);
-      }
+        return options || {};
     }
-    return options || {};
-  }
 
-  constructor(...args){
-    super(...args);
-    this.imports = {};
-    this.exports = {};
-  }
+    moduleId:String;
+    project:Project;
 
-  getImport(name){
-    if(!this.imports[name]){
-      this.imports[name] = {}
+    constructor(file) {
+        super(file);
+        this.project = this.file.project;
+        this.moduleId = this.file.opts.moduleId;
+        this.imports = {};
+        this.proxies = {};
+        this.exports = {};
     }
-    return this.imports[name];
-  }
-  getExport(name){
-    name = name || '*';
-    if(!this.exports[name]){
-      this.exports[name] = {}
-    }
-    return this.exports[name];
-  }
-  buildDependencyLiterals() {
-    var names = [];
-    for (var name in this.ids) {
-      names.push(t.literal(name));
-    }
-    return names;
-  }
-
-  /**
-   * Wrap the entire body in a `define` wrapper.
-   */
-
-  transform(program) {
-    var options = AsxFormatter.options(this.file.ast);
-    //DefaultFormatter.prototype.transform.apply(this, arguments);
-
-    var locals = [];
-    var definitions = [];
-    var body = [];
-    program.body.forEach(item=>{
-      switch(item.type){
-        case 'ExpressionStatement':
-          var exp = item.expression;
-          if(exp.type=='Literal' && exp.value.toLowerCase()=='use strict'){
-            return;
-          }
-        break;
-        case 'VariableDeclaration':
-            item.declarations.forEach(d=>{
-              locals.push(d.id);
-            });
-        break;
-        case 'FunctionDeclaration':
-          if(item.id.name=='module'){
-            item.body.body.forEach(s=>{
-              body.push(s);
-            })
-            return;
-          }else
-          if(item._class){
-            item.id =t.identifier('c$'+item._class);
-            body.push(t.expressionStatement(t.callExpression(
-              t.memberExpression(
-                t.identifier('asx'),
-                t.identifier('c$')
-              ),[item])));
-            return;
-          }else{
-            locals.push(item.id);
-          }
-        break;
-      }
-      body.push(item);
-    });
-
-    var definer = [];
-
-
-
-    if(Object.keys(this.imports).length){
-
-      Object.keys(this.imports).forEach(key=>{
-        var items = this.imports[key];
-        if(items['*'] && typeof items['*']=='string'){
-          this.imports[key]=items['*'];
+    getImport(name) {
+        name = this.project.resolveModule(
+            this.moduleId, name
+        );
+        if (!this.imports[name]) {
+            this.imports[name] = {}
         }
-      });
-      definer.push(t.property('init',
-        t.identifier('imports'),
-        t.valueToNode(this.imports)
-      ))
+        return this.imports[name];
     }
-    var exports;
-    if(this.exports['*']){
-      exports = this.exports['*'];
-      delete this.exports['*'];
+    getExport(name) {
+        var isSelf = (!name || name == this.moduleId);
+        if(isSelf){
+           return this.exports;
+        }
+        var exports = this.proxies;
+        name = this.file.project.resolveModule(
+            this.moduleId, name || this.moduleId
+        );
+        exports = this.proxies;
+        if (!exports[name]) {
+            exports[name] = {}
+        }
+        return exports[name];
     }
-    if(Object.keys(this.exports).length){
-      definer.push(t.property('init',
-        t.identifier('exports'),
-        t.valueToNode(this.exports)
-      ))
-    }
-    if(body.length){
-      if(exports){
-        var ret = [];
-        Object.keys(exports).forEach(key=>{
-          var val = exports[key];
-          if(typeof val=='string') {
-            ret.push(t.property('init',
-              t.identifier(key),
-              t.functionExpression(null,[],t.blockStatement([
-                t.returnStatement(t.identifier(val == '*' ? key : val))
-              ]))
-            ))
-          }else{
-            ret.push(t.property('init',
-              t.identifier(key),
-              t.functionExpression(null,[],t.blockStatement([
-                t.returnStatement(val)
-              ])))
-            );
-          }
+
+    transform(program) {
+        var options = AsxFormatter.options(this.file.ast);
+        var locals = [];
+        var classes=[],methods=[],fields=[],definitions;
+        var body = [];
+        var execution = [];
+        program.body.forEach(item=> {
+            switch (item.type) {
+                case 'VariableDeclaration':
+                    if(item._const){
+                        item.declarations.forEach(d=>{
+                            fields.push(this.convertField(d));
+                        });
+                        return;
+                    }
+                break;
+                case 'FunctionDeclaration':
+                    if(item._class){
+                        classes.push(this.convertClass(item));
+                    }else{
+                        methods.push(this.convertMethod(item));
+                    }
+                    return;
+                break;
+            }
+            execution.push(item);
+        });
+        definitions = [].concat(fields).concat(methods).concat(classes);
+
+        if(this.defaultExport){
+            execution.push(t.returnStatement(this.defaultExport));
+        }
+        if(execution.length){
+
+            definitions.unshift(t.property('init',t.identifier('default'),
+                t.functionExpression(null, [], t.blockStatement(execution))
+            ));
+        }
+        this.project.module(this.moduleId,{
+            imports: this.imports,
+            proxies: this.proxies,
+            exports: this.exports
         });
 
-        body.push(t.expressionStatement(t.callExpression(t.memberExpression(
-            t.identifier('__'),
-            t.identifier('export')),
-            [t.objectExpression(ret)]
-        )));
-      }
-      var initializer  = t.functionExpression(null, [t.identifier('__')], t.blockStatement([
-          t.withStatement(t.identifier('this'), t.blockStatement(body))
-      ]));
-      definer.push(t.property('init',
-        t.identifier('execute'),
-        initializer
-      ))
-    }
-    definitions.forEach(item=>{
 
-      if(item._class){
-        definer.push(t.property('init',
-          t.literal('.'+item._class),
-          item
-        ))
-      }else{
-        definer.push(t.property('init',
-          t.literal(':'+item.id.name),
-          item
-        ))
-      }
-
-    });
-    definer = t.objectExpression(definer);
-
-
-
-    /*
-    var definer = t.functionExpression(null, [t.identifier("module")], t.blockStatement(body));
-    if(options.bind){
-      definer = t.callExpression(
-        t.memberExpression(
-          definer,
-          t.identifier("bind")
-        ),[
-          t.callExpression(t.identifier("eval"),[t.literal("this.global=this")])
-        ]
-      );
-    }*/
-    var body = [];
-    var definer = util.template("asx-module",{
-      MODULE_NAME: t.literal(this.getModuleName()),
-      MODULE_BODY: definer
-    });
-    if(options.runtime){
-      var rt = util.template("asx-runtime")
-      //rt._compact = true;
-      body.push(t.expressionStatement(rt));
-    }
-    body.push(t.expressionStatement(definer))
-    program.body = body;
-  }
-
-  /**
-   * Get the AMD module name that we'll prepend to the wrapper
-   * to define this module
-   */
-  getModuleName() {
-    return super.getModuleName();
-  }
-  importDeclaration(node) {
-    this.getImport(node.source.value)['*'] = '*';
-  }
-  importSpecifier(specifier, node, nodes) {
-    var imp = this.getImport(node.source.value);
-    switch(specifier.type){
-      case 'ImportNamespaceSpecifier' :
-        imp['*'] = specifier.local.name;
-      break;
-      case 'ImportDefaultSpecifier' :
-        imp['default'] = specifier.local.name;
-      break;
-      case 'ImportSpecifier' :
-        var imported = specifier.imported.name;
-        var local = specifier.local.name;
-        if(imported == local){
-          imp[imported] = '*';
-        }else{
-          imp[imported] = local;
+        var definer,oe;
+        if(definitions.length){
+            body.push(t.returnStatement(t.assignmentExpression('=',t.identifier('__'),
+                t.callExpression(t.identifier('__'),[oe=t.objectExpression(definitions)])
+            )));
         }
-      break;
+        if (body.length) {
+            definer = t.functionExpression(null, [t.identifier('__')], t.blockStatement([
+                t.withStatement(t.identifier('this'), t.blockStatement(body))
+            ]));
+        }
+        body = [];
+        definer = util.template("asx-module", {
+            MODULE_NAME: t.literal(this.moduleId),
+            MODULE_BODY: definer
+        });
+        body.push(t.expressionStatement(definer));
+
+        oe._compact = false;
+        program._compact = true;
+        program.body = body;
     }
-  }
-  exportAllDeclaration(node, nodes) {
-    this.getExport(node.source.value)['*'] = '*';
-  }
-  exportDeclaration(node, nodes) {
-    //console.info("Declaration");
-    switch(node.type){
-      case 'ExportDefaultDeclaration' :
-        var exp = this.getExport();
-        exp['default'] = node.declaration;
+    convertField(field){
+        var p = [],d=[],v,f;
+        if(field.id.typeAnnotation){
+            d.push(ast.convertType(field.id.typeAnnotation.typeAnnotation));
+        }
+
+        if(field.init){
+            p.push(t.property("init", t.identifier("V"),v=t.functionExpression(field.id, [], t.blockStatement([
+                t.returnStatement(field.init)
+            ]))));
+        }
+        if(d.length){
+            p.push(t.property("init", ast.decoratorId,ast.convertDecorators(d)));
+        }
+        f = t.objectExpression(p);
+        //f._compact = true;
+        //v._compact = false;
+        return t.property('init',field.id,f);
     }
-    //JSON.ast_print(node);
-  }
-  exportSpecifier(specifier, node, nodes) {
-    var exp = this.getExport(node.source?node.source.value:false);
-    switch(specifier.type){
-      case 'ExportSpecifier' :
-        var exported = specifier.exported.name;
-        var local = specifier.local.name;
-        exp[exported] = local==exported?'*':local;
-      break;
-      default :
-        JSON.ast_print(specifier);
-      break;
+    convertMethod(method){
+        var p = [],d=[];
+        method._compact = false;
+        if(method.returnType){
+            d.push(ast.convertType(method.returnType.typeAnnotation));
+        }
+        if(method.params && method.params.length){
+            d.push(ast.convertArguments(method.params));
+        }
+        var def = t.objectExpression(p);
+        //def._compact=true;
+        p.push(t.property("init", t.identifier("F"), method));
+
+        if(d.length){
+            p.push(t.property("init", ast.decoratorId,ast.convertDecorators(d)));
+        }
+
+        p = t.property('init',method.id,def);
+        //method.id = null;
+
+        return p;
+
     }
-  }
+    convertMethodParam(param,rests) {
+        var name, args, rest = false;
+        if (param.type == 'RestElement') {
+            name = param.argument;
+            rests.push(name);
+        } else
+        if (param.type == 'AssignmentPattern') {
+            name = param.left;
+        } else {
+            name = param;
+        }
+        if (param.typeAnnotation) {
+            args = ast.convertType(param.typeAnnotation.typeAnnotation)
+        } else {
+            args = ast.convertType(t.genericTypeAnnotation(t.identifier('Object')))
+        }
+        return t.property("init", name, args)
+    }
+
+    convertClass(closure){
+        var properties = t.property('init',closure.id,closure);
+        closure.id = null;
+        return properties;
+    }
+    importDeclaration(node) {
+        this.getImport(node.source.value)['*'] = '*';
+    }
+    importSpecifier(specifier, node, nodes) {
+        var imp = this.getImport(node.source.value);
+        switch (specifier.type) {
+            case 'ImportNamespaceSpecifier' :
+                imp['*'] = specifier.local.name;
+                break;
+            case 'ImportDefaultSpecifier' :
+                imp['default'] = specifier.local.name;
+                break;
+            case 'ImportSpecifier' :
+                var imported = specifier.imported.name;
+                var local = specifier.local.name;
+                if (imported == local) {
+                    imp[imported] = '*';
+                } else {
+                    imp[imported] = local;
+                }
+                break;
+        }
+    }
+    exportAllDeclaration(node, nodes) {
+        this.getExport(node.source.value)['*'] = '*';
+    }
+    exportDeclaration(node, nodes) {
+        switch (node.type) {
+            case 'ExportDefaultDeclaration' :
+                this.exports.default = '*';
+                this.defaultExport = node.declaration;
+        }
+    }
+    exportSpecifier(specifier, node, nodes) {
+        var exp = this.getExport(node.source ? node.source.value : false);
+        switch (specifier.type) {
+            case 'ExportSpecifier' :
+                var exported = specifier.exported.name;
+                var local = specifier.local.name;
+                exp[exported] = local == exported ? '*' : local;
+                break;
+            default :
+                JSON.ast_print(specifier);
+                break;
+        }
+    }
 }

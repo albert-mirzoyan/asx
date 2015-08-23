@@ -191,13 +191,7 @@ export function VariableDeclaration(node, print, parent) {
   }
 
   var sep = ",";
-  if (!this.format.compact && hasInits && !this.format.retainLines) {
-    sep += `\n${repeating(" ", node.kind.length + 1)}`;
-  } else {
-    sep += " ";
-  }
-
-  print.list(node.declarations, { separator: sep });
+   print.list(node.declarations, { separator: sep });
 
   if (t.isFor(parent)) {
     if (parent.left === node || parent.init === node) return;

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import {Project} from "./compiler/project"
 import {Files} from "./utils/files"
+import {Version} from "./utils/version";
 
 class Compiler {
   static load(conf){
@@ -36,14 +37,14 @@ class Compiler {
     }
 
     config.outDir = Files.resolve(out);
-    config.outPath = Files.resolve(out,config.project);
+    config.outPath = Files.resolve(out,config.name,config.version);
 
     return new Compiler(config);
   }
   static multi(config,out){
     out = out || Files.resolve(Files.dirname(config.path),config.output);
     return Object.keys(config.modules).map(path=>{
-      var cp = Files.resolve(Files.dirname(config.path),path)
+      var cp = Files.resolve(Files.dirname(config.path),path);
       var watch = config.modules[path]=='watch';
       var conf = this.load(cp);
       conf.watch = watch;
@@ -122,7 +123,25 @@ class Compiler {
     resources.forEach(file=>{
       Files.copyFile(file.file,Files.resolve(out,file.path));
     });
-    Files.writeFile(Files.resolve(out,'package.json'),JSON.stringify(this.config,null,'  '));
+    Files.writeFile(Files.resolve(out,'package.json'),JSON.stringify(this.project,null,'  '));
+
+    var projectJson,projectJsonFile = Files.resolve(out,'../project.json');
+    if(Files.isFile(projectJsonFile)){
+      projectJson = Files.readJson(projectJsonFile);
+    }else{
+      projectJson = {
+        latest   : this.project.version,
+        versions : []
+      }
+    }
+
+    if(projectJson.versions.indexOf(this.project.version)<0){
+      projectJson.versions.push(new Version(this.project.version).toString());
+    }
+    projectJson.versions.sort(Version.compare).reverse();
+    projectJson.latest = projectJson.versions[0];
+    Files.writeFile(projectJsonFile,JSON.stringify(projectJson,null,'  '));
+
     if(watch){
       this.watch();
     }
@@ -150,7 +169,7 @@ class Compiler {
     return file;
   }
   watch(){
-    console.info("Watching "+this.config.group+':'+this.config.project);
+    console.info("Watching "+this.config.group+':'+this.config.name);
     this.watcher = Files.watch(this.config.srcPath,{
       persistent: true,
       recursive: true
@@ -161,7 +180,7 @@ class Compiler {
     if(Files.isFile(f)){
       var out = this.config.outPath;
       var file = this.file(f);
-      console.info('changed '+this.config.group+':'+this.config.project+' '+file.path);
+      console.info('changed '+this.config.group+':'+this.config.name+' '+file.path);
       switch(file.type){
         case 'source'   :
           this.project.compileSource(file);

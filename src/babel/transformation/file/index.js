@@ -107,7 +107,10 @@ export default class File {
 
   normalizeOptions(opts: Object) {
     opts = assign({}, opts);
-
+    if (opts.project){
+      this.project = opts.project;
+      delete opts.project;
+    }
     if (opts.filename) {
       var rcFilename = opts.filename;
       if (!isAbsolute(rcFilename)) rcFilename = path.join(process.cwd(), rcFilename);

@@ -16,6 +16,7 @@ export function ObjectExpression(node, print) {
 
   if (props.length) {
     this.push("{");
+    this.newline();
     this.space();
 
     print.list(props, { indent: true });

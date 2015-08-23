@@ -1,8 +1,22 @@
+function merge(a,b){
+    var object = {};
+    var aks = Object.getOwnPropertyNames(a);
+    var bks = Object.getOwnPropertyNames(b);
+    aks.forEach(ka=>{
+        if(bks.indexOf(ka)<0){
+            Object.defineProperty(object,ka,Object.getOwnPropertyDescriptor(a,ka));
+        }
+    });
+    bks.forEach(kb=>{
+        Object.defineProperty(object,kb,Object.getOwnPropertyDescriptor(b,kb));
+    });
+    return object;
+}
 function inherits(child, parent) {
     if (typeof parent !== 'function' && parent !== null) {
         throw new TypeError('Super expression must either be null or a function, not ' + typeof parent);
     }
-    child.prototype = Object.create(parent && parent.prototype, {
+    child.prototype = Object.create(merge(parent && parent.prototype,child.prototype), {
         constructor: {
             value           : child,
             enumerable      : false,
@@ -18,6 +32,24 @@ function decorate(target,name,descriptor){
     var member = descriptor.value;
     if(member.decorators){
         console.info('DECORATE WITH',member.decorators);
+        member.decorators.bind(member)({
+            type    : function(Type){
+                return function(target){
+                    target.type = Type;
+                }
+            },
+            extend  : function(Parent){
+                return function(Base){
+                    inherits(Base,Parent)
+                }
+            },
+            arguments:function(){
+                return function(target){
+
+                }
+            }
+        });
+        delete member.decorators;
     }
     switch(member.kind){
         case 'field':
@@ -49,7 +81,7 @@ function convertClass(def){
         delete def['.constructor'];
         clazz = IC.F;
         Object.defineProperties(clazz,{
-            decorators  : {value:IC.A}
+            decorators  : {configurable:true,value:IC.A}
         });
         Object.keys(def).forEach(key=>{
             var member = convertClassMember(key,def);
@@ -63,6 +95,11 @@ function convertClass(def){
                 }
             });
         });
+        return {
+            super : function(target,args){
+                clazz.__proto__.apply(target,args);
+            }
+        }
     });
     return clazz;
 }
@@ -93,7 +130,7 @@ function convertClassMember(key,def){
         static      : {value:isStatic},
         kind        : {value:kind},
         module      : {value:this},
-        decorators  : {value:decors}
+        decorators  : {configurable:true,value:decors}
     });
     delete def[key];
     return member;
@@ -140,7 +177,7 @@ function convertModuleMember(key,def){
             name        : {value:key},
             kind        : {value:kind},
             module      : {value:this},
-            decorators  : {value:decors}
+            decorators  : {configurable:true,value:decors}
         });
     } else {
         console.info('UNKNOWN MEMBER TYPE');

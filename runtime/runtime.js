@@ -1,241 +1,287 @@
-function merge(a,b){
-    var object = {};
-    var aks = Object.getOwnPropertyNames(a);
-    var bks = Object.getOwnPropertyNames(b);
-    aks.forEach(ka=>{
-        if(bks.indexOf(ka)<0){
-            Object.defineProperty(object,ka,Object.getOwnPropertyDescriptor(a,ka));
-        }
-    });
-    bks.forEach(kb=>{
-        Object.defineProperty(object,kb,Object.getOwnPropertyDescriptor(b,kb));
-    });
-    return object;
-}
-function inherits(child, parent) {
-    if (typeof parent !== 'function' && parent !== null) {
-        throw new TypeError('Super expression must either be null or a function, not ' + typeof parent);
+class Helpers {
+    static merge(a,b){
+        var object = {};
+        var aks = Object.getOwnPropertyNames(a);
+        var bks = Object.getOwnPropertyNames(b);
+        aks.forEach(ka=>{
+            if(bks.indexOf(ka)<0){
+                Object.defineProperty(object,ka,Object.getOwnPropertyDescriptor(a,ka));
+            }
+        });
+        bks.forEach(kb=>{
+            Object.defineProperty(object,kb,Object.getOwnPropertyDescriptor(b,kb));
+        });
+        return object;
     }
-    child.prototype = Object.create(merge(parent && parent.prototype,child.prototype), {
-        constructor: {
-            value           : child,
-            enumerable      : false,
+    static setPrototypeOf(instance,proto){
+        instance.__proto__ = proto;
+    }
+    static inherits(child, parent) {
+        if (typeof parent !== 'function' && parent !== null) {
+            throw new TypeError('Super expression must either be null or a function, not ' + typeof parent);
+        }
+        child.prototype = Object.create(this.merge(parent && parent.prototype,child.prototype), {
+            constructor: {
+                value           : child,
+                enumerable      : false,
+                writable        : true,
+                configurable    : true
+            }
+        });
+        if (parent) {
+            child.__proto__ = parent;
+        }
+    }
+    static getProjectId(path){
+        return path.split('/')[0];
+    }
+    static getProjectName(path){
+        return this.getProjectId(path).split('@')[0];
+    }
+    static getProjectVersion(path){
+        return this.getProjectId(path).split('@')[1];
+    }
+    static getModuleName(path){
+        path = path.split('/');
+        path.shift();
+        return path.join('/')
+    }
+    static convertClass(def){
+        var clazz = null;
+        def(def=>{
+            var IC = def['.constructor'];
+            delete def['.constructor'];
+            clazz = IC.F;
+            Metadata.set(clazz,{
+                name        : clazz.name,
+                module      : this,
+                type        : 'class',
+                decorators  : IC.A,
+                module      : this
+            });
+            Object.keys(def).forEach(key=>{
+                var member = Helpers.convertClassMember.bind(clazz)(key,def);
+                var metadata = Metadata.get(member);
+                var container = metadata.static ? clazz:clazz.prototype;
+                Object.defineProperty(container,metadata.name,{
+                    configurable    : true,
+                    get             : function(){
+                        return Object.defineProperty(this,metadata.name,Decorator.decorate(this,member))[metadata.name];
+                    }
+                });
+            });
+            return {
+                super : function(target,args){
+                    clazz.__proto__.apply(target,args);
+                }
+            }
+        });
+        return clazz;
+    }
+    static convertClassMember(key,def){
+        var member = def[key];
+        var decors = member.A;
+        var kind = 'unknown';
+        var name = key.substring(1);
+        var isStatic = key[0]==':';
+        if(typeof member =='function'){
+            kind = 'class';
+            member = Helpers.convertClass.bind(this)(member)
+        }else
+        if(typeof member =='object'){
+            if (member.F) {
+                member = member.F;
+                kind = 'method';
+            } else
+            if(member.V){
+                member = member.V;
+                kind = 'field';
+            }
+        } else {
+            console.info('UNKNOWN MEMBER TYPE');
+        }
+        Metadata.set(member,{
+            name        : name,
+            class       : this,
+            type        : kind,
+            decorators  : decors,
+            static      : isStatic
+        });
+        delete def[key];
+        return member;
+    }
+    static convertModule(){
+        this.scope={};
+        this.definition=this.definition.bind(this.scope);
+        this.definition(def=>{
+            this.default = def.default;
+            delete def.default;
+            Object.keys(def).forEach(key=>{
+                var member = Helpers.convertModuleMember.bind(this)(key,def);
+                var metadata = Metadata.get(member);
+                Object.defineProperty(this.scope,metadata.name,{
+                    configurable : true,
+                    get : function(){
+                        return Object.defineProperty(this,metadata.name,Decorator.decorate(this,member))[metadata.name];
+                    }
+                })
+            });
+            return Runtime;
+        });
+        delete this.definition;
+    }
+    static convertModuleMember(key,def){
+        var member = def[key];
+        var decors = member.A;
+        var kind = 'unknown';
+        if(typeof member =='function'){
+            member = Helpers.convertClass.bind(this)(member);
+            kind = 'class'
+        }else
+        if(typeof member =='object'){
+            if (member.F) {
+                member = member.F;
+                kind = 'method';
+            } else
+            if(member.V){
+                member = member.V;
+                kind = 'field';
+            }
+
+        } else {
+            console.info('UNKNOWN MEMBER TYPE');
+        }
+        Metadata.set(member,{
+            name        : key,
+            module      : this,
+            type        : kind,
+            decorators  : decors
+        });
+        delete def[key];
+        return member;
+    }
+    static onModuleComplete(r){
+        Helpers.convertModule.bind(this)();
+        Object.keys(this.exports).forEach(key=>{
+            if(key=='default'){
+                Object.defineProperty(this.exports,key,{
+                    get : this.default
+                });
+                delete this.default;
+            }else{
+                var exported = this.exports[key];
+                var local = exported;
+                if(local == '*'){
+                    local = key;
+                }
+                Object.defineProperty(this.exports,local,{
+                    configurable:true,
+                    get:function(){
+                        return Object.defineProperty(this.exports,local,{
+                            value : this.scope[local]
+                        })[local];
+                    }
+                });
+            }
+        });
+        console.info('INITIALIZE MODULE');
+        delete this.pending;
+        return this.exports;
+    }
+    static onModuleFailure(e){
+        console.error(e);
+        throw e;
+    }
+    static onProjectComplete(r){
+        this.id = r.name+'@'+r.version;
+        this.name = r.name;
+        this.version = r.version;
+        this.modules = {};
+        Object.keys(r.modules).forEach(id=>{
+            this.modules[id] = new Module(this,id,r.modules[id]);
+        });
+        delete this.pending;
+        return this;
+    }
+    static onProjectFailure(r){
+        console.info(r);
+        return this;
+    }
+}
+class Metadata {
+    static METADATA = Symbol('metadata');
+    static set(target,data){
+        var metadata = target[Metadata.METADATA];
+        if(!metadata){
+            metadata = target[Metadata.METADATA] = Object.create(null);
+        }
+        for(var key in data){
+            if(data[key]!==undefined){
+                if(data[key]===null){
+                    delete metadata[key];
+                }else{
+                    metadata[key] = data[key];
+                }
+            }
+        }
+        return metadata;
+    }
+    static get(target){
+        return target[Metadata.METADATA];
+    }
+}
+class Decorator {
+    static TYPE = Symbol('type');
+
+    static decorate(target,member){
+        var descriptor = {
+            configurable    : true,
+            enumerable      : true,
             writable        : true,
-            configurable    : true
+            value           : member
+        };
+        var metadata = Metadata.get(member);
+        if(metadata.decorators){
+            metadata.decorators(new Decorator(target,member,descriptor));
+            delete metadata.decorators;
         }
-    });
-    if (parent) {
-        child.__proto__ = parent;
-    }
-}
-function decorate(target,name,descriptor){
-    var member = descriptor.value;
-    if(member.decorators){
-        console.info('DECORATE WITH',member.decorators);
-        member.decorators.bind(member)({
-            type    : function(Type){
-                return function(target){
-                    target.type = Type;
-                }
-            },
-            extend  : function(Parent){
-                return function(Base){
-                    inherits(Base,Parent)
-                }
-            },
-            arguments:function(){
-                return function(target){
-
-                }
-            }
-        });
-        delete member.decorators;
-    }
-    switch(member.kind){
-        case 'field':
+        if(metadata.type=='field'){
             descriptor.value = member.call(target);
-        break;
+            //Metadata.set(descriptor.value,metadata);
+        }
+        return descriptor;
     }
-    return descriptor;
-}
-
-function getProjectId(path){
-    return path.split('/')[0];
-}
-function getProjectName(path){
-    return getProjectId(path).split('@')[0];
-}
-function getProjectVersion(path){
-    return getProjectId(path).split('@')[1];
-}
-function getModuleName(path){
-    path = path.split('/');
-    path.shift();
-    return path.join('/')
-}
-
-function convertClass(def){
-    var clazz = null;
-    def(def=>{
-        var IC = def['.constructor'];
-        delete def['.constructor'];
-        clazz = IC.F;
-        Object.defineProperties(clazz,{
-            decorators  : {configurable:true,value:IC.A}
-        });
-        Object.keys(def).forEach(key=>{
-            var member = convertClassMember(key,def);
-            var container = member.static ? clazz:clazz.prototype;
-            Object.defineProperty(container,member.name,{
-                configurable : true,
-                get : function(){
-                    return Object.defineProperty(this,member.name,decorate(this,member.name,{
-                        value : member
-                    }))[member.name];
-                }
-            });
-        });
-        return {
-            super : function(target,args){
-                clazz.__proto__.apply(target,args);
+    constructor(target,member,descriptor){
+        var metadata = Metadata.get(member);
+        var instance = function(fn){
+            switch(metadata.type){
+                case 'class'    :fn(member);break;
+                case 'field'    :fn(target,metadata.name,descriptor);break;
+                case 'method'   :fn(target,metadata.name,descriptor);break;
             }
-        }
-    });
-    return clazz;
-}
-function convertClassMember(key,def){
-    var member = def[key];
-    var decors = member.A;
-    var kind = 'unknown';
-    var name = key.substring(1);
-    var isStatic = key[0]==':';
-    if(typeof member =='function'){
-        kind = 'class';
-        member = convertClass.bind(this)(member)
-    }else
-    if(typeof member =='object'){
-        if (member.F) {
-            member = member.F;
-            kind = 'method';
-        } else
-        if(member.V){
-            member = member.V;
-            kind = 'field';
-        }
-    } else {
-        console.info('UNKNOWN MEMBER TYPE');
+        };
+        Helpers.setPrototypeOf(instance,Object.create(Decorator.prototype,{
+            constructor:{value:Decorator}
+        }));
+
+        return instance;
     }
-    Object.defineProperties(member,{
-        name        : {value:name},
-        static      : {value:isStatic},
-        kind        : {value:kind},
-        module      : {value:this},
-        decorators  : {configurable:true,value:decors}
-    });
-    delete def[key];
-    return member;
-}
-function convertModule(){
-    this.scope={};
-    this.definition=this.definition.bind(this.scope);
-    this.definition(def=>{
-        this.default = def.default;
-        delete def.default;
-        Object.keys(def).forEach(key=>{
-            var member = convertModuleMember.bind(this)(key,def);
-            Object.defineProperty(this.scope,member.name,{
-                configurable : true,
-                get : function(){
-                    return Object.defineProperty(this,member.name,decorate(this,member.name,{
-                        value : member
-                    }))[member.name];
-                }
-            })
-        });
-        return Runtime;
-    });
-    console.info(this.scope)
-}
-function convertModuleMember(key,def){
-    var member = def[key];
-    var decors = member.A;
-    var kind = 'unknown';
-    if(typeof member =='function'){
-        kind = 'class';
-        member = convertClass(member)
-    }else
-    if(typeof member =='object'){
-        if (member.F) {
-            member = member.F;
-            kind = 'method';
-        } else
-        if(member.V){
-            member = member.V;
-            kind = 'field';
+    type(Type){
+        return function(target,key,descriptor){
+            Metadata.get(descriptor.value)[Decorator.TYPE] = Type;
         }
-        Object.defineProperties(member,{
-            name        : {value:key},
-            kind        : {value:kind},
-            module      : {value:this},
-            decorators  : {configurable:true,value:decors}
-        });
-    } else {
-        console.info('UNKNOWN MEMBER TYPE');
     }
-
-    delete def[key];
-    return member;
-}
-
-function onModuleComplete(r){
-    convertModule.bind(this)();
-    Object.keys(this.exports).forEach(key=>{
-        if(key=='default'){
-            Object.defineProperty(this.exports,key,{
-                get : this.default
-            });
-            delete this.default;
-        }else{
-            var exported = this.exports[key];
-            var local = exported;
-            if(local == '*'){
-                local = key;
-            }
-            Object.defineProperty(this.exports,local,{
-                configurable:true,
-                get:function(){
-                    return Object.defineProperty(this.exports,local,{
-                        value : this.scope[local]
-                    })[local];
-                }
-            });
+    extend(Parent){
+        return function(Child){
+            Helpers.inherits(Child,Parent)
         }
-    });
-    console.info('INITIALIZE MODULE');
-    delete this.pending;
-    return this.exports;
+    }
+    args(){
+        return function(target,key,descriptor){
+            console.info('ARGS',target,key,descriptor);
+        }
+    }
 }
-function onModuleFailure(e){
-    console.error(e);
-    throw e;
-}
-
-function onProjectComplete(r){
-    this.id = r.name+'@'+r.version;
-    this.name = r.name;
-    this.version = r.version;
-    this.modules = {};
-    Object.keys(r.modules).forEach(id=>{
-        this.modules[id] = new Module(this,id,r.modules[id]);
-    });
-    delete this.pending;
-    return this;
-}
-function onProjectFailure(r){
-    console.info(r);
-    return this;
-}
-
 class Project {
     static get versions():Object {
         return Object.defineProperty(this, 'versions', {
@@ -248,7 +294,7 @@ class Project {
         }).projects
     }
     static get(id):Project {
-        var name = getProjectName(id);
+        var name = Helpers.getProjectName(id);
         var project = Project.projects[name];
         if (!project) {
             project = Object.defineProperty(Project.projects, name, {
@@ -261,8 +307,8 @@ class Project {
         return Project.get(id).load();
     }
     constructor(id){
-        this.name = getProjectName(id);
-        this.version = getProjectVersion(id);
+        this.name = Helpers.getProjectName(id);
+        this.version = Helpers.getProjectVersion(id);
         this.pending = true;
     }
     load(){
@@ -285,8 +331,8 @@ class Project {
             }
             return promise.then(v=>{
                 return Loader.loadJson(this.name+'/'+this.version+'/package.json')
-                    .then(onProjectComplete.bind(this))
-                    .catch(onProjectFailure.bind(this))
+                    .then(Helpers.onProjectComplete.bind(this))
+                    .catch(Helpers.onProjectFailure.bind(this))
             });
         }else{
             return Promise.resolve(this);
@@ -303,8 +349,8 @@ class Module {
         }).modules
     }
     static load(id){
-        return Project.load(getProjectId(id)).then(project=>{
-            return project.module(getModuleName(id)).load();
+        return Project.load(Helpers.getProjectId(id)).then(project=>{
+            return project.module(Helpers.getModuleName(id)).load();
         })
     }
     static get(id):Module {
@@ -317,7 +363,7 @@ class Module {
         return module;
     }
     static define(id, definition) {
-        Project.get(getProjectName(id)).module(getModuleName(id)).definition=definition;
+        Project.get(Helpers.getProjectName(id)).module(Helpers.getModuleName(id)).definition=definition;
     }
     constructor(project,name,config) {
         this.id = project.id+'/'+name;
@@ -332,8 +378,8 @@ class Module {
     load() {
         if(this.pending){
             return Loader.load(this.path)
-                .then(onModuleComplete.bind(this))
-                .catch(onModuleFailure.bind(this));
+                .then(Helpers.onModuleComplete.bind(this))
+                .catch(Helpers.onModuleFailure.bind(this));
         }else{
             return Promise.resolve(this.exports);
         }

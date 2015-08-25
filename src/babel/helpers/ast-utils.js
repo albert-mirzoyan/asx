@@ -5,7 +5,7 @@ export class AstUtils {
 
     static convertDecorators(decorators){
         return t.functionExpression(null,[t.identifier('__')],t.blockStatement(decorators.map(d=>t.expressionStatement(
-            t.callExpression(d.expression,[t.identifier('this')])
+            t.callExpression(t.identifier('__'),[d.expression])
         ))))
     }
 
@@ -32,7 +32,7 @@ export class AstUtils {
     static convertArguments(params){
         var p=[];
         params.forEach(i=>p.push(this.convertArgument(i)));
-        return t.decorator(t.callExpression(t.memberExpression(t.identifier('__'),t.identifier('arguments')),[t.objectExpression(p)]))
+        return t.decorator(t.callExpression(t.memberExpression(t.identifier('__'),t.identifier('args')),[t.objectExpression(p)]))
     }
     static convertArgument(param) {
         var type,init=param.init,rest=param.isRest,optional=param.isOptional,args=[];

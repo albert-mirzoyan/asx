@@ -75,7 +75,9 @@ export class Project {
     }
     resolveModule(module,dependency){
         if(dependency[0]=='.'){
-            return Files.resolve(Files.dirname(module),dependency)
+            var pid = Project.getProjectName(module);
+            var mid = Project.getModuleName(module);
+            return pid+'/'+Files.resolve('/'+Files.dirname(mid),dependency).substring(1)
         }else{
             return dependency;
         }

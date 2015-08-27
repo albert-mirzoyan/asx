@@ -9,7 +9,7 @@ export class AstUtils {
         ))))
     }
 
-    static convertType(type){
+    static convertType(type,expr){
         var parameters = [];
         switch(type.type){
             case 'TypeAnnotation' : this.convertType(type.typeAnnotation); break;
@@ -23,10 +23,11 @@ export class AstUtils {
         if(type.typeParameters){
             var tps  = type.typeParameters;
             tps.params.forEach(p=>{
-                parameters.push(this.convertType(p));
+                parameters.push(this.convertType(p,true));
             })
         }
-        return t.decorator(t.callExpression(t.memberExpression(t.identifier('__'),t.identifier('type')),parameters));
+        var expression = t.callExpression(t.memberExpression(t.identifier('__'),t.identifier('type')),parameters)
+        return expr?expression:t.decorator(expression);
     }
 
     static convertArguments(params){

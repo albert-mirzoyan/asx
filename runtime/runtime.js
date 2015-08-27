@@ -318,6 +318,7 @@ class Decorator {
         };
         var metadata = Metadata.get(member);
         if(metadata.decorators){
+            Object.defineProperty(target,metadata.name,descriptor)
             metadata.decorators(new Decorator(target,member,descriptor));
             delete metadata.decorators;
         }
@@ -344,7 +345,11 @@ class Decorator {
     }
     type(Type){
         return function(target,key,descriptor){
-            Metadata.get(descriptor.value)[Decorator.TYPE] = Type;
+            if(descriptor){
+                Metadata.get(descriptor.value)[Decorator.TYPE] = Type;
+            }else{
+                Metadata.get(target)[Decorator.TYPE] = Type;
+            }
         }
     }
     extend(Parent){
@@ -716,7 +721,7 @@ class Runtime {
         Runtime.global.Project = Project;
         if (this.executable) {
             Module.load(this.executable).then(module=> {
-                console.info(module.exports);
+                console.info(module.exports.default);
             });
         }
     }

@@ -1,2 +1,2 @@
-Module.define(MODULE_NAME,MODULE_BODY);
+Asx.module(MODULE_NAME,MODULE_BODY);
 

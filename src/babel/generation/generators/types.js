@@ -54,6 +54,8 @@ export function ArrayExpression(node, print) {
   var len   = elems.length;
 
   this.push("[");
+  this.newline();
+  this.indent();
 
   each(elems, (elem, i) => {
     if (!elem) {
@@ -64,12 +66,16 @@ export function ArrayExpression(node, print) {
       // both (all) of the holes.
       this.push(",");
     } else {
-      if (i > 0) this.push(" ");
+      //if (i > 0) this.push(" ");
       print(elem);
-      if (i < len - 1) this.push(",");
+      if (i < len - 1) {
+        this.push(",");
+        this.newline();
+      }
     }
   });
-
+  this.dedent();
+  this.newline();
   this.push("]");
 }
 

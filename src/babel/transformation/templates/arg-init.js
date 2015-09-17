@@ -1,0 +1,1 @@
+NAME = arguments.has(INDEX)?NAME:DEFAULT;

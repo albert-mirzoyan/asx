@@ -10,33 +10,34 @@ export function shouldVisit(node) {
 }
 
 exports.Super = function (node, parent, scope, file) {
-    var path = scope.path;
+    /*var path = scope.path;
     var id = path.getData('_super');
     if(!id){
-
         id = t.identifier('_super');
-        scope.push({id:id,init:t.memberExpression(
-            t.identifier('_local'),t.identifier('super')
-        )});
-        path.setData('_super',id);
+        scope.push({
+            id:id,
+            init:t.callExpression(t.memberExpression(t.identifier('__'),t.identifier('super')),[
+                t.identifier('this')
+            ])
+        });
+
         return id;
-    }
-    return id;
+    }*/
+    scope.path.setData('_super',true);
+    return t.callExpression(t.memberExpression(t.identifier('Asx'),t.identifier('super')),[t.identifier('this')]);
 };
 exports.Function = function (node, parent, scope, file) {
     if (node.params) {
-        var rest = false,inits = {},argsInit = false;
+        var rest = false,inits = [],argsInit = false;
         node.params = node.params.map((param,id)=> {
             var result = param;
             switch (param.type) {
                 case 'AssignmentPattern':
                     argsInit = true;
-                    inits[id] = param.right;
                     result = param.left;
                     result.init = param.right;
                     result.isOptional = false;
-                    return param.left;
-                    break;
+                break;
                 case 'RestElement':
                     argsInit = true;
                     rest = true;
@@ -45,10 +46,32 @@ exports.Function = function (node, parent, scope, file) {
                     result.typeAnnotation = param.typeAnnotation;
                     break;
             }
+            if(result.init){
+                inits.push(t.expressionStatement(util.template('arg-init',{
+                    NAME    :result,
+                    INDEX   :t.literal(id),
+                    DEFAULT :result.init
+                })));
+                delete result.init;
+            }
+            if(result.isRest){
+                inits.push(t.expressionStatement(util.template('arg-rest',{
+                    NAME    :result,
+                    INDEX   :t.literal(id)
+                })));
+            }
             return result;
         });
-
         if(argsInit){
+            node.body.body = inits.concat(node.body.body);
+            node.body.body.unshift(t.expressionStatement(t.callExpression(t.memberExpression(
+                t.identifier('Asx'),t.identifier('args')
+            ),[
+                t.thisExpression(),
+                t.identifier('arguments')
+            ])));
+        }
+        /*if(argsInit){
             var args = [
                 t.thisExpression(),
                 t.identifier('arguments')
@@ -71,11 +94,11 @@ exports.Function = function (node, parent, scope, file) {
                     args.push(p);
                 }
             }
-            var local = t.identifier('_local');
+            var local = t.identifier('_args');
             scope.push({id:local,init:t.callExpression(t.memberExpression(
-                t.identifier('__'),t.identifier('locals')
+                t.identifier('__'),t.identifier('args')
             ),args)});
-        }
+        }*/
 
     }
 };

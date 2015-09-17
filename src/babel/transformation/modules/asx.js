@@ -4,7 +4,7 @@ import includes from "lodash/collection/includes";
 import values from "lodash/object/values";
 import * as util from  "../../util";
 import * as t from "../../types";
-import ast from "../../helpers/ast-utils";
+import Ast from "../../helpers/ast-utils";
 
 export default class AsxFormatter extends DefaultFormatter {
     static options(ast) {
@@ -79,14 +79,19 @@ export default class AsxFormatter extends DefaultFormatter {
                         return;
                     }
                 break;
-                case 'FunctionDeclaration':
-                    if(item._class){
-                        classes.push(this.convertClass(item));
+                case 'ExpressionStatement':
+                    if(item.expression._class){
+                        classes.push(this.convertClass(item.expression));
+                        return;
                     }else{
-                        methods.push(this.convertMethod(item));
+                        console.info(item)
                     }
+
+                case 'FunctionDeclaration':
+                    methods.push(this.convertMethod(item));
                     return;
                 break;
+                default : console.info(item.type);
             }
             execution.push(item);
         });
@@ -96,34 +101,37 @@ export default class AsxFormatter extends DefaultFormatter {
             execution.push(t.returnStatement(this.defaultExport));
         }
         if(execution.length){
-
-            definitions.unshift(t.property('init',t.identifier('default'),
-                t.functionExpression(null, [], t.blockStatement(execution))
-            ));
+            definitions.unshift(t.callExpression(Ast.MODULE_FIELD,[
+                t.literal('default'),t.literal(0),t.arrayExpression([
+                    t.functionExpression(null, [], t.blockStatement(execution))
+                ])
+            ]));
         }
+
+        this.proxies[this.moduleId] = this.exports;
         this.project.module(this.moduleId,{
             imports: this.imports,
-            proxies: this.proxies,
-            exports: this.exports
+            exports: this.proxies
         });
 
 
         var definer,oe;
         if(definitions.length){
-            body.push(t.returnStatement(t.assignmentExpression('=',t.identifier('__'),
-                t.callExpression(t.identifier('__'),[oe=t.objectExpression(definitions)])
-            )));
+            definitions.map(d=>{
+                body.push(t.expressionStatement(d));
+            })
         }
         if (body.length) {
-            definer = t.functionExpression(null, [t.identifier('__')], t.blockStatement([
-                t.withStatement(t.identifier('this'), t.blockStatement(body))
+            definer = t.functionExpression(null, [t.identifier('Asx')], t.blockStatement([
+                t.withStatement(t.identifier('this'), oe=t.blockStatement(body))
             ]));
         }
         body = [];
-        definer = util.template("asx-module", {
-            MODULE_NAME: t.literal(this.moduleId),
-            MODULE_BODY: definer
-        });
+
+        definer = t.callExpression(Ast.MODULE,[
+            t.literal(this.moduleId),
+            definer
+        ]);
         body.push(t.expressionStatement(definer));
 
         oe._compact = false;
@@ -133,44 +141,55 @@ export default class AsxFormatter extends DefaultFormatter {
     convertField(field){
         var p = [],d=[],v,f;
         if(field.id.typeAnnotation){
-            d.push(ast.convertType(field.id.typeAnnotation.typeAnnotation));
+            p.push(t.functionExpression(t.identifier(field.id.name+'$type'), [], t.blockStatement([
+                t.returnStatement(Ast.convertType(field.id.typeAnnotation))
+            ])));
         }
 
-        if(field.init){
-            p.push(t.property("init", t.identifier("V"),v=t.functionExpression(field.id, [], t.blockStatement([
-                t.returnStatement(field.init)
-            ]))));
-        }
+
         if(d.length){
-            p.push(t.property("init", ast.decoratorId,ast.convertDecorators(d)));
+            p.push(Ast.convertDecorators(d,t.identifier(field.id.name+'$decorators')));
         }
-        f = t.objectExpression(p);
+        if(field.init){
+            p.unshift(t.functionExpression(field.id, [], t.blockStatement([
+                t.returnStatement(field.init)
+            ])));
+        }
+        f = t.arrayExpression(p);
         //f._compact = true;
         //v._compact = false;
-        return t.property('init',field.id,f);
+
+        return t.callExpression(Ast.MODULE_FIELD,[
+            t.literal(field.id.name),t.literal(0),f
+        ]);
     }
     convertMethod(method){
         var p = [],d=[];
         method._compact = false;
         if(method.returnType){
-            d.push(ast.convertType(method.returnType.typeAnnotation));
+            p.push(t.functionExpression(t.identifier(method.id.name+'$type'), [], t.blockStatement([
+                t.returnStatement(Ast.convertType(method.returnType.typeAnnotation))
+            ])));
         }
         if(method.params && method.params.length){
-            d.push(ast.convertArguments(method.params));
+            p.push(t.functionExpression(t.identifier(method.id.name+'$parameters'), [], t.blockStatement([
+                t.returnStatement(Ast.convertArguments(method.params))
+            ])));
         }
-        var def = t.objectExpression(p);
+
         //def._compact=true;
-        p.push(t.property("init", t.identifier("F"), method));
 
         if(d.length){
-            p.push(t.property("init", ast.decoratorId,ast.convertDecorators(d)));
+            p.push(Ast.convertDecorators(d,t.identifier(method.id.name+'$decorators')));
         }
+        p.unshift(method);
 
-        p = t.property('init',method.id,def);
+
         //method.id = null;
 
-        return p;
-
+        return t.callExpression(Ast.MODULE_METHOD,[
+            t.literal(method.id.name),t.literal(0),t.arrayExpression(p)
+        ]);
     }
     convertMethodParam(param,rests) {
         var name, args, rest = false;
@@ -184,17 +203,15 @@ export default class AsxFormatter extends DefaultFormatter {
             name = param;
         }
         if (param.typeAnnotation) {
-            args = ast.convertType(param.typeAnnotation.typeAnnotation)
+            args = Ast.convertType(param.typeAnnotation.typeAnnotation)
         } else {
-            args = ast.convertType(t.genericTypeAnnotation(t.identifier('Object')))
+            args = Ast.convertType(t.genericTypeAnnotation(t.identifier('Object')))
         }
         return t.property("init", name, args)
     }
 
     convertClass(closure){
-        var properties = t.property('init',closure.id,closure);
-        closure.id = null;
-        return properties;
+        return closure;
     }
     importDeclaration(node) {
         this.getImport(node.source.value)['*'] = '*';

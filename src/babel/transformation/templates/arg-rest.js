@@ -1,0 +1,1 @@
+NAME = arguments.rest(INDEX);

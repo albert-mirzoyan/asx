@@ -1,17 +1,9 @@
+import {Mirror} from './mirror';
+
 class Helpers {
-    static merge(a,b){
-        var object = {};
-        var aks = Object.getOwnPropertyNames(a);
-        var bks = Object.getOwnPropertyNames(b);
-        aks.forEach(ka=>{
-            if(bks.indexOf(ka)<0){
-                Object.defineProperty(object,ka,Object.getOwnPropertyDescriptor(a,ka));
-            }
-        });
-        bks.forEach(kb=>{
-            Object.defineProperty(object,kb,Object.getOwnPropertyDescriptor(b,kb));
-        });
-        return object;
+    static object(o){
+        o.__proto__ = null;
+        return o;
     }
     static setPrototypeOf(instance,proto){
         instance.__proto__ = proto;
@@ -20,13 +12,14 @@ class Helpers {
         if (typeof parent !== 'function' && parent !== null) {
             throw new TypeError('Super expression must either be null or a function, not ' + typeof parent);
         }
-        child.prototype = Object.create(this.merge(parent && parent.prototype,child.prototype), {
-            constructor: {
-                value           : child,
-                enumerable      : false,
-                writable        : true,
-                configurable    : true
+        var override = child.prototype;
+        child.prototype = Object.create(parent && parent.prototype);
+        Object.getOwnPropertyNames(override).forEach(n=>{
+            var d = Object.getOwnPropertyDescriptor(override,n);
+            if(n=='constructor'){
+                d.enumerable = false;
             }
+            Object.defineProperty(child.prototype,n,d);
         });
         if (parent) {
             child.__proto__ = parent;
@@ -46,6 +39,8 @@ class Helpers {
         path.shift();
         return path.join('/')
     }
+
+
     static convertClass(def){
         var clazz = null;
         def(def=>{
@@ -64,6 +59,7 @@ class Helpers {
                 var metadata = Metadata.get(member);
                 var container = metadata.static ? clazz:clazz.prototype;
                 Object.defineProperty(container,metadata.name,{
+                    enumerable      : true,
                     configurable    : true,
                     get             : function(){
                         return Object.defineProperty(this,metadata.name,Decorator.decorate(this,member))[metadata.name];
@@ -75,14 +71,11 @@ class Helpers {
                     }
                 });
             });
-            return {
-                super : function(target,args){
-                    clazz.__proto__.apply(target,args);
-                }
-            }
+            return new ClassContext(clazz);
         });
         return clazz;
     }
+
     static convertClassMember(key,def){
         var member = def[key];
         var decors = member.A;
@@ -115,25 +108,141 @@ class Helpers {
         delete def[key];
         return member;
     }
-    static convertModule(){
-        this.definition=this.definition.bind(this.scope);
+    static defineClassMember(key,def){
+
+    }
+    static initializeClassMember(key,def){
+
+    }
+
+    static convertModule(scope){
+        this.definition=this.definition.bind(scope);
         this.definition(def=>{
             this.default = def.default;
             delete def.default;
             Object.keys(def).forEach(key=>{
-                var member = Helpers.convertModuleMember.bind(this)(key,def);
-                var metadata = Metadata.get(member);
-                Object.defineProperty(this.scope,metadata.name,{
-                    configurable : true,
-                    get : function(){
-                        return Object.defineProperty(this,metadata.name,Decorator.decorate(this,member))[metadata.name];
-                    }
-                })
+                Helpers.defineModuleMember(scope,key,Helpers.convertModuleMember.bind(this)(key,def))
             });
             return Runtime;
         });
         delete this.definition;
     }
+    static initializeModule(){
+        var scope = Object.create(null);
+        var exports = Object.create(null);
+        Helpers.convertModule.bind(this)(scope);
+        var config = Module.project(this.project).modules[this.name];
+        Object.keys(config.exports).forEach(k=>{
+            var n = config.exports[k];
+            if(n=='*'){
+                n=k;
+            }
+            Object.defineProperty(exports,n,{
+                enumerable      : true,
+                configurable    : true,
+                get             : function(){
+                    return Object.defineProperty(this,n,{
+                        enumerable      : true,
+                        writable        : false,
+                        configurable    : true,
+                        value           : scope[n]
+                    })[n];
+                }
+            })
+        });
+        if(this.default){
+            var def = this.default.bind(this);
+            Object.defineProperty(exports,'default',{
+                enumerable      : true,
+                configurable    : true,
+                get             : function(){
+                    return Object.defineProperty(this,'default',{
+                        enumerable      : true,
+                        writable        : false,
+                        configurable    : true,
+                        value           : def()
+                    }).default;
+                }
+            });
+        }
+        delete this.default;
+        Object.keys(config.imports).forEach(m=>{
+            var imports = config.imports[m];
+            Object.keys(imports).forEach(k=>{
+                var n = imports[k];
+                if(n=='*'){
+                    n=k;
+                }
+                Object.defineProperty(scope,n,{
+                    enumerable      : true,
+                    configurable    : true,
+                    get             : function(){
+                        return Object.defineProperty(this,n,{
+                            enumerable      : true,
+                            writable        : false,
+                            configurable    : true,
+                            value           : Module.get(m).exports[n]
+                        })[n];
+                    }
+                })
+            })
+        });
+        Object.keys(config.proxies).forEach(m=>{
+            var imports = config.proxies[m];
+            Object.keys(imports).forEach(k=>{
+                var n = imports[k];
+                if(n=='*'){
+                    n=k;
+                }
+                Object.defineProperty(exports,n,{
+                    enumerable      : true,
+                    configurable    : true,
+                    get             : function(){
+                        return Object.defineProperty(this,n,{
+                            enumerable      : true,
+                            writable        : false,
+                            configurable    : true,
+                            value           : Module.get(m).exports[n]
+                        })[n];
+                    }
+                })
+            })
+        });
+        Object.defineProperty(this,'exports',{
+            enumerable      : true,
+            configurable    : true,
+            get             : function(){
+                if(Object.keys(exports).length){
+                    return Object.defineProperty(this,'exports',{
+                        enumerable      : true,
+                        writable        : true,
+                        configurable    : true,
+                        value           : exports
+                    }).exports;
+                }else{
+                    delete this.exports;
+                }
+            }
+        });
+        Object.defineProperty(this,'scope',{
+            enumerable      : true,
+            configurable    : true,
+            get             : function(){
+                if(Object.keys(scope).length){
+                    return Object.defineProperty(this,'scope',{
+                        enumerable   : true,
+                        writable     : true,
+                        configurable : true,
+                        value        : scope
+                    }).scope;
+                }else{
+                    delete this.scope;
+                }
+            }
+        });
+        return this;
+    }
+
     static convertModuleMember(key,def){
         var member = def[key];
         var decors = member.A;
@@ -164,128 +273,112 @@ class Helpers {
         delete def[key];
         return member;
     }
-    static initializeModuleImports(){
-        if(this.imports){
-            var imports = Object.keys(this.imports);
-            if(imports.length){
-                imports = imports.map(i=>{
-                    return Module.load(i).then(m=>{
-                        Object.keys(this.imports[i]).forEach(k=>{
-                            var ref = this.imports[i][k];
-                            if(ref=='*'){
-                                ref = k;
-                            }
-                            Object.defineProperty(this.scope,ref,{
-                                configurable:true,
-                                get:function(){
-                                    return Object.defineProperty(this,ref,{
-                                        value : m[ref]
-                                    })[ref];
-                                }
-                            });
-                        })
-                    });
-                });
-                promise = promise.then(r=>Promise.all(imports))
+    static defineModuleMember(scope,key,member){
+        Object.defineProperty(scope,key,{
+            enumerable      : true,
+            configurable    : true,
+            get             : function(){
+                return Object.defineProperty(this,key,
+                    Helpers.initializeModuleMember(this,member)
+                )[key];
             }
+        })
+    }
+    static initializeModuleMember(scope,member){
+        return Decorator.decorate(scope,member)
+    }
+
+    static loadProject(){
+        if(this.loading) {
+            return this.loading;
+        } else
+        if(!this.pending){
+            return Promise.resolve(this);
+        }else{
+            var promise = Promise.resolve(this);
+            if(!this.version){
+                console.info("LOADING VERSION FOR "+this.name);
+                promise = Loader.loadJson(this.name+'/project.json').then(r=>{
+                    console.info("LOADED VERSION FOR "+this.name+" IS "+r.latest);
+                    this.version = r.latest;
+                    return this;
+                });
+            }
+            return this.loading = promise.then(v=>{
+                return Loader.loadJson(this.name+'/'+this.version+'/package.json').then(r=>{
+                    this.modules = r.modules;
+                    delete this.loading;
+                    delete this.pending;
+                    return this;
+                })
+            });
         }
     }
-    static initializeModuleProxies(){
-        if(this.proxies){
-            var proxies = Object.keys(this.proxies);
-            if(proxies.length){
-                proxies = proxies.map(i=>{
-                    return Module.load(i).then(m=>{
-                        Object.keys(this.proxies[i]).forEach(k=>{
-                            var ref = this.proxies[i][k];
-                            if(ref=='*'){
-                                ref = k;
-                            }
-                            Object.defineProperty(this.exports,ref,{
-                                configurable    : true,
-                                get             : function(){
-                                    return Object.defineProperty(this,ref,{
-                                        value : m[ref]
-                                    })[ref];
-                                }
-                            });
-                        })
-                    });
+    static loadModule(){
+        if(this.loading) {
+            return Promise.resolve(this);
+        } else
+        if(!this.pending){
+            return Promise.resolve(this);
+        }else{
+            var promise = Promise.resolve(this);
+            if(!this.version){
+                console.info("LOADING VERSION FOR "+this.name);
+                promise = Helpers.loadProject.bind(Module.project(this.project))().then(p=>{
+                    console.info("LOADED VERSION FOR "+this.name+" IS "+p.version);
+                    this.version = p.version;
+                    return this;
                 });
-                promise = promise.then(r=>Promise.all(proxies))
             }
-        }
-    }
-    static initializeModuleExports(){
-        Object.keys(this.exports).forEach(key=>{
-            if(key=='default'){
-                Object.defineProperty(this.exports,key,{
-                    get : this.default
-                });
-                delete this.default;
-            }else{
-                var exported = this.exports[key];
-                var local = exported;
-                if(local == '*'){
-                    local = key;
+            promise = promise.then(()=>{
+                var config = Module.project(this.project).modules[this.name];
+                var dependencies = [];
+                if(config.imports){
+                    dependencies = dependencies.concat(Object.keys(config.imports));
                 }
-                var scope = this.scope;
-                Object.defineProperty(this.exports,local,{
-                    configurable:true,
-                    get:function(){
-                        return Object.defineProperty(this,local,{
-                            value : scope[local]
-                        })[local];
-                    }
+                if(config.proxies){
+                    dependencies = dependencies.concat(Object.keys(config.proxies));
+                }
+                if(dependencies.length){
+                    console.info("LOADING DEPENDENCIES FOR "+this.name);
+                    return Promise.all(dependencies.map(d=>Module.load(d))).then(r=>{
+                        console.info("LOADED DEPENDENCIES FOR "+this.name);
+                        return this;
+                    })
+                }
+                return this;
+            });
+            promise = promise.then(()=>{
+                var project = Module.project(this.project);
+                return Loader.load(project.name+'/'+project.version+'/'+this.name).then(()=>{
+                    return this;
                 });
-            }
-        });
+            });
+            return this.loading = promise.then(()=>{
+                delete this.loading;
+                delete this.pending;
+                return Helpers.initializeModule.bind(this)();
+            });
+        }
     }
-    static onModuleComplete(r){
-        Helpers.convertModule.bind(this)();
-        console.info('INITIALIZE MODULE');
-        delete this.pending;
-        return this.exports;
-    }
-    static onModuleFailure(e){
-        console.error(e);
-        throw e;
-    }
-    static resolveProjectDependencies(){
-        var list = [];
-        Object.keys(this.modules).forEach(m=>{
-            var module = this.modules[m];
-            list = list.concat(Object.keys(module.imports));
-            list = list.concat(Object.keys(module.proxies));
-        });
-        return list
-            .map(m=>Helpers.getProjectName(m))
-            .filter((p,i,a)=>(a.indexOf(p)==i&&p!=this.name));
-    }
-    static onProjectComplete(r){
-        this.name = r.name;
-        this.version = r.version;
-        this.modules = {};
-        var mods = [];
-        Object.keys(r.modules).forEach(id=>{
-            mods.push(Module.get(this.name+'/'+id).resolve(r.modules[id]).then(m=>{
-                this.modules[m.name] = m;
-            }));
-        });
-        return Promise.all(mods).then(ms=>{
-            console.info(ms);
-            return this
-        }).catch(e=>{
-            console.info(e);
-        });
-    }
-    static onProjectFailure(r){
-        console.info(r);
-        return this;
+
+}
+
+class ModuleMirror {
+    uri          : String;
+    declarations : Map<Symbol,DeclarationMirror>;
+    dependencies : List<DependencyMirror>;
+}
+class MirrorSystem {}
+class Reflect {
+    static system : MirrorSystem;
+    static reflect(object:Object){
+
     }
 }
+
 class Metadata {
-    static METADATA = Symbol('metadata');
+    static METADATA = Symbol.metadata = Symbol('metadata');
     static set(target,data){
         var metadata = target[Metadata.METADATA];
         if(!metadata){
@@ -332,7 +425,9 @@ class Decorator {
         var metadata = Metadata.get(member);
         var instance = function(fn){
             switch(metadata.type){
-                case 'class'    :fn(member);break;
+                case 'class'    :
+                    fn(member);
+                    break;
                 case 'field'    :fn(target,metadata.name,descriptor);break;
                 case 'method'   :fn(target,metadata.name,descriptor);break;
             }
@@ -353,211 +448,83 @@ class Decorator {
         }
     }
     extend(Parent){
-        return function(Child){
+        return (Child)=>{
             Helpers.inherits(Child,Parent)
         }
     }
     args(){
-        return function(target,key,descriptor){
-            console.info('ARGS',target,key,descriptor);
-        }
-    }
-}
-class Project {
-    static get versions():Object {
-        return Object.defineProperty(this, 'versions', {
-            value: {}
-        }).versions
-    }
-    static get projects():Object {
-        return Object.defineProperty(this, 'projects', {
-            value: {}
-        }).projects
-    }
-    static get(id):Project {
-        var name = Helpers.getProjectName(id);
-        var project = Project.projects[name];
-        if (!project) {
-            project = Object.defineProperty(Project.projects, name, {
-                value : new Project(id)
-            })[name];
-        }
-        return project;
-    }
-    static load(id):Project {
-        return Project.get(id).load();
-    }
-    constructor(id){
-        this.name = Helpers.getProjectName(id);
-        this.version = Helpers.getProjectVersion(id);
-        this.pending = true;
-    }
-    load(){
-        if(this.loading) {
-            return this.loading;
-        } else
-        if(this.loaded){
-            return Promise.resolve(this);
-        }else{
-            var promise = Promise.resolve(this);
-            if(!this.version){
-                console.info("LOADING VERSION FOR "+this.name);
-                promise = Loader.loadJson(this.name+'/project.json').then(r=>{
-                    console.info("LOADED VERSION FOR "+this.name+" IS "+r.latest);
-                    this.version = r.latest;
-                    return this;
-                });
-            }
-            return this.loading = promise.then(v=>{
-                return Loader.loadJson(this.name+'/'+this.version+'/package.json').then(r=>{
-                    this.modules = r.modules;
-                    delete this.loading;
-                    this.loaded = true;
-                    return this;
-                })
-            });
+        return (target,key,descriptor)=>{
+            console.info('ARGS',target.name,key,descriptor);
         }
     }
 }
 class Module {
+    static get projects():Object {
+        return Object.defineProperty(this, 'projects', {
+            enumerable      : true,
+            writable        : true,
+            configurable    : false,
+            value           : Object.create(null)
+        }).projects
+    }
     static get modules():Object {
         return Object.defineProperty(this, 'modules', {
-            value: {}
+            enumerable      :true,
+            writable        :true,
+            configurable    :false,
+            value: Object.create(null)
         }).modules
     }
     static load(id){
-        return Module.get(id).load();
+        return Helpers.loadModule.bind(Module.get(id))().then(m=>{
+            return m.exports;
+        });
     }
     static get(id):Module {
         var module = Module.modules[id];
         if (!module){
             module = Object.defineProperty(Module.modules, id, {
-                value : new Module(id)
+                enumerable      : true,
+                writable        : true,
+                configurable    : true,
+                value           : new Module(id)
             })[id];
         }
         return module;
+    }
+    static set(id,exports){
+        var module = Module.get(id);
+        module.pending = false;
+        module.exports = exports;
+        return module;
+    }
+    static project(id) {
+        var name = Helpers.getProjectName(id);
+        var project = this.projects[name];
+        if (!project) {
+            project = Object.defineProperty(this.projects, name, {
+                configurable    : false,
+                enumerable      : true,
+                writable        : false,
+                value           : Helpers.object({
+                    name        : Helpers.getProjectName(id),
+                    version     : Helpers.getProjectVersion(id),
+                    pending     : true
+                })
+            })[name];
+        }
+        return project;
     }
     static define(id, definition) {
         Module.get(Helpers.getProjectName(id)+'/'+Helpers.getModuleName(id)).definition=definition;
     }
     constructor(id){
         this.name       = Helpers.getModuleName(id);
-        this.project    = Project.get(Helpers.getProjectName(id));
-    }
-    load(){
-        if(this.loading) {
-            return Promise.resolve(this);
-        } else
-        if(this.loaded){
-            return Promise.resolve(this);
-        }else{
-            var promise = Promise.resolve(this);
-            if(!this.version){
-                console.info("LOADING VERSION FOR "+this.name);
-                promise = this.project.load().then(p=>{
-                    console.info("LOADED VERSION FOR "+this.name+" IS "+p.version);
-                    this.version = p.version;
-                    return this;
-                });
-            }
-            promise = promise.then(()=>{
-                var config = this.project.modules[this.name];
-                var dependencies = [];
-                dependencies = dependencies.concat(Object.keys(config.imports));
-                dependencies = dependencies.concat(Object.keys(config.proxies));
-                if(dependencies.length){
-                    console.info("LOADING DEPENDENCIES FOR "+this.name);
-                    return Promise.all(dependencies.map(d=>Module.load(d))).then(r=>{
-                        console.info("LOADED DEPENDENCIES FOR "+this.name);
-                        return this;
-                    })
-                }
-                return this;
-            });
-            promise = promise.then(()=>{
-                return Loader.load(this.project.name+'/'+this.project.version+'/'+this.name).then(()=>{
-                    return this;
-                });
-            });
-            return this.loading = promise.then(()=>{
-                this.loaded = true;
-                delete this.loading;
-                return this.initialize();
-            });
-        }
-    }
-    initialize(){
-        if(this.initialized){
-            return this.exports;
-        }else{
-            var scope = this.scope   = {};
-            Helpers.convertModule.bind(this)();
-            this.exports = {};
-            var config = this.project.modules[this.name];
-            Object.keys(config.exports).forEach(k=>{
-                var n = config.exports[k];
-                if(n=='*'){
-                    n=k;
-                }
-                Object.defineProperty(this.exports,n,{
-                    configurable:true,
-                    get:function(){
-                        return Object.defineProperty(this,n,{
-                            value :scope[n]
-                        })[n];
-                    }
-                })
-            });
-            if(this.default){
-                var def = this.default.bind(this);
-                Object.defineProperty(this.exports,'default',{
-                    configurable:true,
-                    get:function(){
-                        return Object.defineProperty(this,'default',{
-                            value : def()
-                        }).default;
-                    }
-                });
-                delete this.default;
-            }
-            Object.keys(config.imports).forEach(m=>{
-                var imports = config.imports[m];
-                Object.keys(imports).forEach(k=>{
-                    var n = imports[k];
-                    if(n=='*'){
-                        n=k;
-                    }
-                    Object.defineProperty(scope,n,{
-                        configurable:true,
-                        get:function(){
-                            return Object.defineProperty(this,n,{
-                                value : Module.get(m).exports[n]
-                            })[n];
-                        }
-                    })
-                })
-            });
-            Object.keys(config.proxies).forEach(m=>{
-                var imports = config.proxies[m];
-                Object.keys(imports).forEach(k=>{
-                    var n = imports[k];
-                    if(n=='*'){
-                        n=k;
-                    }
-                    Object.defineProperty(this.exports,n,{
-                        configurable:true,
-                        get:function(){
-                            return Object.defineProperty(this,n,{
-                                value : Module.get(m).exports[n]
-                            })[n];
-                        }
-                    })
-                })
-            });
-            return this;
-        }
+        this.project    = Helpers.getProjectName(id);
+        this.pending    = true;
     }
 }
+
 class Loader {
     static get repository() {
         return Object.defineProperty(this, 'repository', {
@@ -718,12 +685,55 @@ class Runtime {
     }
     static execute() {
         Runtime.global.Module = Module;
-        Runtime.global.Project = Project;
+        Module.set('runtime',{
+            Reflect : Reflect
+        });
         if (this.executable) {
             Module.load(this.executable).then(module=> {
-                console.info(module.exports.default);
+                var result =  module && module.default;
+                Object.keys(Module.modules).forEach(m=>{
+                    m = Module.get(m);
+                    if(m.exports){
+                        Object.getOwnPropertyNames(m.exports).forEach(name=>m.exports[name])
+                    }
+                    if(m.scope){
+                        Object.getOwnPropertyNames(m.scope).forEach(name=>m.scope[name]);
+                    }
+                    delete m.scope;
+                });
+                if(typeof result =='function'){
+                    result = result();
+                }
+                if(typeof result !='undefined'){
+                    console.log(result)
+                }
             });
         }
+    }
+}
+
+class GlobalContext {
+    args(target,argums){
+        argums.has = function has(n){
+            return this[n]!==undefined;
+        };
+        argums.rest = function has(n){
+            return Array.prototype.slice.call(this,n);
+        };
+    }
+}
+
+class ModuleContext extends GlobalContext {}
+class ClassContext extends GlobalContext {
+    constructor(clazz){
+        super();
+        this.classReference = clazz;
+    }
+    super(target,args){
+        if(this.classReference.__proto__){
+            this.classReference.__proto__.apply(target,args);
+        }
+        Object.keys(this.classReference.prototype).forEach(k=>target[k]);
     }
 }
 

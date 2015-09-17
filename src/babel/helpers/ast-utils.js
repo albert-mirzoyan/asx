@@ -1,18 +1,29 @@
 import * as t from '../types/index';
 
 export class AstUtils {
+    static MODULE             = t.memberExpression(t.identifier('Asx'),t.identifier('module'));
+    static MODULE_METHOD      = t.memberExpression(t.identifier('Asx'),t.identifier('method'));
+    static MODULE_FIELD       = t.memberExpression(t.identifier('Asx'),t.identifier('field'));
+    static MODULE_DEFAULT     = t.memberExpression(t.identifier('Asx'),t.identifier('default'));
+
+    static CLASS              = t.memberExpression(t.identifier('Asx'),t.identifier('class')); // not yet
+    static CLASS_SUPER        = t.memberExpression(t.identifier('Asx'),t.identifier('super'));
+    static CLASS_METHOD       = t.memberExpression(t.identifier('Asx'),t.identifier('method'));
+    static CLASS_FIELD        = t.memberExpression(t.identifier('Asx'),t.identifier('field'));
+    static CLASS_CONSTRUCTOR  = t.memberExpression(t.identifier('Asx'),t.identifier('default'));
+
+
     static decoratorId = t.identifier("A");
 
-    static convertDecorators(decorators){
-        return t.functionExpression(null,[t.identifier('__')],t.blockStatement(decorators.map(d=>t.expressionStatement(
-            t.callExpression(t.identifier('__'),[d.expression])
-        ))))
+    static convertDecorators(decorators,id){
+        return t.functionExpression(id,[],t.blockStatement([t.returnStatement(
+            t.arrayExpression(decorators.map(d=>d.expression))
+        )]))
     }
-
     static convertType(type,expr){
         var parameters = [];
         switch(type.type){
-            case 'TypeAnnotation' : this.convertType(type.typeAnnotation); break;
+            case 'TypeAnnotation' : return this.convertType(type.typeAnnotation,expr); break;
             case 'VoidTypeAnnotation' : break;
             case 'AnyTypeAnnotation' : parameters.push(t.identifier('Object')); break;
             case 'NumberTypeAnnotation' : parameters.push(t.identifier('Number')); break;
@@ -26,14 +37,13 @@ export class AstUtils {
                 parameters.push(this.convertType(p,true));
             })
         }
-        var expression = t.callExpression(t.memberExpression(t.identifier('__'),t.identifier('type')),parameters)
-        return expr?expression:t.decorator(expression);
+        return t.callExpression(t.memberExpression(t.identifier('Asx'),t.identifier('type')),parameters);
     }
 
     static convertArguments(params){
         var p=[];
         params.forEach(i=>p.push(this.convertArgument(i)));
-        return t.decorator(t.callExpression(t.memberExpression(t.identifier('__'),t.identifier('args')),[t.objectExpression(p)]))
+        return t.arrayExpression(p);
     }
     static convertArgument(param) {
         var type,init=param.init,rest=param.isRest,optional=param.isOptional,args=[];
@@ -42,11 +52,13 @@ export class AstUtils {
         } else {
             type = this.convertType(t.genericTypeAnnotation(t.identifier('Object')))
         }
-        args.push(optional ? t.literal(true):t.literal(false));
-        args.push(rest ? t.literal(true):t.literal(false));
-        args.push(type.expression);
-        args.push(init?init:t.literal(null));
-        return t.property("init", param, t.arrayExpression(args))
+        args.push(t.literal(param.name));
+        args.push(optional ? t.literal(1):t.literal(0));
+        args.push(rest ? t.literal(1):t.literal(0));
+        args.push(type);
+        //args.push(init?init:t.literal(null));
+
+        return t.callExpression(t.memberExpression(t.identifier('Asx'),t.identifier('arg')),args)
     }
 }
 export default AstUtils;

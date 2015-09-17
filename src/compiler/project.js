@@ -61,7 +61,7 @@ export class Project {
                 code: true,
                 stage: 0,
                 filename: file.path,
-                moduleId: this.name+'@'+this.version+'/'+file.name,
+                moduleId: this.name+'/'+file.name,
                 modules: 'asx'
             });
             file.output = result.code;
@@ -84,10 +84,11 @@ export class Project {
     }
     toJSON(){
         return {
-            name : this.name,
-            version : this.version,
-            platforms : this.platforms,
-            modules : this.modules
+            name        : this.name,
+            version     : this.version,
+            platforms   : this.platforms,
+            modules     : this.modules,
+            main        : this.config.main
         }
     }
 }

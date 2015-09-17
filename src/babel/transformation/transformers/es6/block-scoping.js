@@ -245,7 +245,7 @@ class BlockScoping {
    * Description
    */
 
-  constructor(loopPath?: TraversalPath, blockPath: TraversalPath, parent: Object, scope: Scope, file: File) {
+  constructor(loopPath: TraversalPath, blockPath: TraversalPath, parent: Object, scope: Scope, file: File) {
     this.parent = parent;
     this.scope  = scope;
     this.file   = file;
@@ -421,7 +421,7 @@ class BlockScoping {
    * Push the closure to the body.
    */
 
-  buildClosure(ret: { type: "Identifier" }, call: { type: "CallExpression" }) {
+  buildClosure(ret, call) {
     var has = this.has;
     if (has.hasReturn || has.hasBreakContinue) {
       this.buildHas(ret, call);
@@ -551,7 +551,7 @@ class BlockScoping {
    * their declarations hoisted to before the closure wrapper.
    */
 
-  pushDeclar(node: { type: "VariableDeclaration" }): Array<Object> {
+  pushDeclar(node): Array<Object> {
     this.body.push(t.variableDeclaration(node.kind, node.declarations.map(function (declar) {
       return t.variableDeclarator(declar.id);
     })));
@@ -573,7 +573,7 @@ class BlockScoping {
    * Description
    */
 
-  buildHas(ret: { type: "Identifier" }, call: { type: "CallExpression" }) {
+  buildHas(ret, call) {
     var body = this.body;
 
     body.push(t.variableDeclaration("var", [

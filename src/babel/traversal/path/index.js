@@ -53,7 +53,7 @@ export default class TraversalPath {
    * Description
    */
 
-  static get(parentPath: TraversalPath, context?: TraversalContext, parent, container, key, file?: File) {
+  static get(parentPath: TraversalPath, context: TraversalContext, parent, container, key, file: File) {
     var targetNode = container[key];
     var paths = container._paths = container._paths || [];
     var path;
@@ -80,7 +80,7 @@ export default class TraversalPath {
    * Description
    */
 
-  static getScope(path: TraversalPath, scope: Scope, file?: File) {
+  static getScope(path: TraversalPath, scope: Scope, file: File) {
     var ourScope = scope;
 
     // we're entering a new scope so let's construct it!
@@ -279,7 +279,7 @@ export default class TraversalPath {
    * Description
    */
 
-  setScope(file?) {
+  setScope(file) {
     var target = this.context || this.parentPath;
     this.scope = TraversalPath.getScope(this, target && target.scope, file);
   }
@@ -296,7 +296,7 @@ export default class TraversalPath {
    * Description
    */
 
-  setContext(parentPath, context, key, file?) {
+  setContext(parentPath, context, key, file) {
     this.shouldSkip = false;
     this.shouldStop = false;
     this.removed    = false;
@@ -598,7 +598,7 @@ export default class TraversalPath {
    * Description
    */
 
-  getStatementParent(): ?TraversalPath {
+  getStatementParent():TraversalPath{
     var path = this;
 
     do {
@@ -686,7 +686,7 @@ export default class TraversalPath {
       fns = fns.concat(opts[node.type][key]);
     }
 
-    for (var fn of (fns: Array)) {
+    for (var fn of fns) {
       if (!fn) continue;
 
       // call the function with the params (node, parent, scope, state)
@@ -832,10 +832,7 @@ export default class TraversalPath {
    * Description
    */
 
-  getTypeAnnotation(): {
-    inferred: boolean;
-    annotation: ?Object;
-  } {
+  getTypeAnnotation(){
     if (this.typeInfo) {
       return this.typeInfo;
     }
@@ -864,7 +861,7 @@ export default class TraversalPath {
    * Description
    */
 
-  resolve(): ?TraversalPath {
+  resolve():TraversalPath {
     if (this.isVariableDeclarator()) {
       if (this.get("id").isIdentifier()) {
         return this.get("init").resolve();
@@ -919,7 +916,7 @@ export default class TraversalPath {
    * Description
    */
 
-  inferType(path: TraversalPath): ?Object {
+  inferType(path: TraversalPath):Object {
     path = path.resolve();
     if (!path) return;
 
@@ -1020,7 +1017,7 @@ export default class TraversalPath {
    * parsed nodes of `React.createClass` and `React["createClass"]`.
    */
 
-  matchesPattern(pattern: string, allowPartial?: boolean): boolean {
+  matchesPattern(pattern: string, allowPartial: boolean): boolean {
    var parts = pattern.split(".");
 
     // not a member expression
@@ -1082,7 +1079,7 @@ for (let type in virtualTypes) {
   };
 }
 
-for (let type of (t.TYPES: Array)) {
+for (let type of t.TYPES) {
   let typeKey = `is${type}`;
   TraversalPath.prototype[typeKey] = function (opts) {
     return t[typeKey](this.node, opts);

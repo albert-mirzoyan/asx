@@ -1,0 +1,6 @@
+{
+  "name" : "project-a",
+  "version" : "0.0.1",
+  "platforms" : ["node","browser"],
+  "main" : "module-a"
+}

@@ -1,0 +1,8 @@
+{
+  "output"                : "../out",
+  "modules"               : {
+    "./project-a"          : "compile",
+    "./project-b"          : "compile",
+    "./project-c"          : "compile"
+  }
+}

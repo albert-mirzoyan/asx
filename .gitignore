@@ -20,5 +20,5 @@ packages/babel-runtime/regenerator/*.js
 lib
 vendor
 modules/out
-repository
+repository/out
 .idea

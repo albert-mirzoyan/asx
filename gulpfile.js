@@ -10,8 +10,8 @@ var paths = {
             'runtime/runtime/utils/url.js',
             'runtime/runtime/decorators.js',
             'runtime/runtime/loader.js',
-            'runtime/runtime/mirrors.js',
             'runtime/runtime/system.js',
+            'runtime/runtime/mirrors.js',
             'runtime/runtime/reflect.js',
             'runtime/index.js'
         ]

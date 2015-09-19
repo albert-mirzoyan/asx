@@ -1,4 +1,4 @@
-export {System} from './runtime/system';
 export {Loader} from './runtime/loader';
+export {System} from './runtime/mirrors';
 
-new System();
+global.Asx = new System();

@@ -1,14 +1,19 @@
-import {System} from './system';
-import {Platform} from './system';
+import {Platform} from './mirrors';
 import {Url} from './utils/url';
 
 export class Loader {
 
     static getProject(uri){
-        return uri.split('/')[0].split('@')[0];
+        var parts = uri.split('/')[0];
+        return parts.split('@')[0];
     }
     static getVersion(uri){
-        return uri.split('/')[0].split('@')[1];
+        var parts = uri.split('/')[0];
+        var version = 'latest';
+        if(parts.length>1){
+            version = parts.split('@')[1] || version;
+        }
+        return version;
     }
     static getModule(uri){
         uri = uri.split('/');
@@ -73,34 +78,22 @@ export class Loader {
         this.projects = {};
         this.modules  = {};
     }
-    resolve(uri){
-        if(this.modules[uri]){
-            return uri;
-        }else{
-            var project = Loader.getProject(uri);
-            var version = Loader.getVersion(uri);
-            if(!version){
-                if(!this.projects[project]){
-                    return false;
-                }else{
-                    version = this.projects[project].latest;
-                }
-            }
-            var module  = Loader.getModule(uri);
-            if(!module){
-                module = this.projects[project][version].main || 'index';
-            }
-            return project+'@'+version+'/'+module;
-        }
-    }
     module(uri){
-        if(!this.modules[uri]){
-            uri = this.resolve(uri);
-        }
         var module = this.modules[uri];
-        if(module && module[MIRROR]){
-            if(typeof module[MIRROR].initialize=='function'){
-                module[MIRROR].initialize();
+        if(!module){
+            var pid = Loader.getProject(uri);
+            var vid = Loader.getVersion(uri);
+            var mid = Loader.getModule(uri);
+            var project = this.projects[pid];
+            if(project){
+                if(vid=='latest'){
+                    vid = project.latest;
+                }
+                project = project[vid];
+                if(!mid){
+                    mid = project.main || 'index';
+                }
+                module = this.modules[uri] = project.modules[mid];
             }
         }
         return module;
@@ -117,103 +110,134 @@ export class Loader {
         }
         return project[Loader.getModule(uri)||'index']=exports;
     }
-    import(uri=this.executable){
-        var module = this.module(uri);
-        if(module){
-            return Promise.resolve(module);
-        }else{
-            return this.load(uri).then(m=>{
-                return m.initialize();
-            });
-        }
-    }
     load(uri=this.executable){
-        var loadProject = ()=>{
-            var projectId = Loader.getProject(uri);
-            if(!projectId){
+        var modules = {};
+        var loadProjectVersions = (uri)=>{
+            var pid = Loader.getProject(uri);
+            if(!pid){
                 throw new Error(`Invalid project URI '${uri}'`);
             }
-            var project = this.projects[projectId];
-            if (project) {
-                return project;
-            }else{
-                project = this.projects[projectId] = {
-                    name : projectId
+            var project = this.projects[pid];
+            if (!project) {
+                project = this.projects[pid] = {
+                    pending : true,
+                    name    : pid,
+                    url     : Loader.resolve(this.repository,pid,'project.json')
                 };
-                return this.loadJson(Loader.resolve(this.repository,projectId,'project.json')).then(p=>{
-                    for(var key in p){
-                        project[key] = p[key];
+            }
+            if(project.pending && !project.loading){
+                project.loading = true;
+                return this.loadJson(project.url).then(patch=>{
+                    delete project.pending;
+                    delete project.loading;
+                    for(var key in patch){
+                        project[key] = patch[key];
                     }
                     return project;
                 })
+            }else{
+                return Promise.resolve(project)
             }
         };
-        var loadLibrary = (project)=>{
-            var version = Loader.getVersion(uri) || project.latest;
-            var library = project[version];
-            if(typeof library == 'object'){
-                return library;
-            }else{
-                library = project[version] = {
-                    project : project.name,
-                    version : version
-                };
-                return this.loadJson(Loader.resolve(this.repository,project.name,version,'package.json')).then(l=> {
-                    for(var key in l){
-                        library[key] = l[key];
+        var loadProjectInstance = (uri)=>{
+            return loadProjectVersions(uri).then(versions=>{
+                var vid = Loader.getVersion(uri);
+                if(vid=='latest'){
+                    vid =  versions.latest;
+                }
+                var project = versions[vid];
+                if (!project) {
+                    project = versions[vid] = {
+                        pending : true,
+                        name    : versions.name,
+                        url     : Loader.resolve(this.repository,versions.name,vid,'package.json')
+                    };
+                }
+                if(project.pending && !project.loading){
+                    project.loading = true;
+                    return this.loadJson(project.url).then(patch=>{
+                        delete project.pending;
+                        delete project.loading;
+                        for(var key in patch){
+                            project[key] = patch[key];
+                        }
+                        for(var mid in project.modules){
+                            var module = project.modules[mid];
+                            module.pending = true;
+                            module.uri = project.name+'@'+project.version+'/'+mid;
+                            module.url = Loader.resolve(this.repository,project.name,project.version,mid+'.js');
+                            module.dependencies = {};
+                            for(var iid in module.imports){
+                                module.dependencies[iid]={
+                                    pending : true
+                                };
+                            }
+                            for(var eid in module.exports){
+                                module.dependencies[eid]={
+                                    pending : true
+                                };
+                            }
+                        }
+                        return project;
+                    })
+                }else{
+                    return Promise.resolve(project)
+                }
+            });
+        };
+        var loadProjectModule   = (uri)=>{
+            return loadProjectInstance(uri).then(project=>{
+                var mid = Loader.getModule(uri) || project.main || 'index';
+                var module = project.modules[mid];
+                if(module.pending && !module.loading){
+                    module.loading = true;
+                    return this.loadText(module.url).then(source=>{
+                        delete module.pending;
+                        delete module.loading;
+                        module.source = source;
+                        return module;
+                    })
+                }else{
+                    return Promise.resolve(module)
+                }
+            }).then(m=>this.evaluate(m))
+        };
+        var loadModule          = (uri)=>{
+            return loadProjectModule(uri).then(module=>{
+                return Promise.all(Object.keys(module.dependencies).map(did=>{
+                    var dependency = module.dependencies[did];
+                    if(dependency.pending && !dependency.loading){
+                        dependency.loading = true;
+                        return loadModule(did).then(m=>{
+                            delete dependency.pending;
+                            delete dependency.loading;
+                            //module.dependencies[m.uri] = m;
+
+                            m.parent = module;
+                            if(module.imports[did]){
+                                var imports = module.imports[did];
+                                module.imports[m.uri] = imports;
+                                delete module.imports[did];
+                            }
+                            if(module.exports[did]){
+                                var exports = module.exports[did];
+                                module.exports[m.uri] = exports;
+                                delete module.exports[did];
+                            }
+                            return m;
+                        });
                     }
-                    return library;
-                })
-            }
+                }).filter(i=>!!i)).then(dps=>modules[module.uri] = module);
+            });
         };
-        var loadModule  = (library)=>{
-            var moduleId = Loader.getModule(uri) || library.main || 'index';
-            var module = library.modules[moduleId];
-
-            module.uri = library.name+'@'+library.version+'/'+moduleId;
-            module.url = Loader.resolve(this.repository,library.name,library.version,moduleId+'.js');
-            var dependencies = [];
-            if(module.imports && !module.imports.resolved){
-                Object.defineProperty(module.imports,'resolved',{value:true});
-                dependencies = dependencies.concat(Object.keys(module.imports).map(d=>this.load(d).then(m=>{
-                    module.imports[m.uri] = module.imports[d];
-                    delete module.imports[d];
-                })));
-            }
-            if(module.exports && !module.exports.resolved){
-                Object.defineProperty(module.exports,'resolved',{value:true});
-                dependencies = dependencies.concat(Object.keys(module.exports).map(d=>this.load(d).then(m=>{
-                    module.exports[m.uri] = module.exports[d];
-                    delete module.exports[d];
-                })));
-            }
-            if(dependencies.length){
-                return Promise.all(dependencies).then(r=>{
-                    return module;
-                })
-            }else{
-                return module;
-            }
-
-        };
-        var loadScript  = (module)=>{
-            if(module.pending || module.source){
-                return module;
-            }else{
-                module.pending = true;
-                return this.loadText(Loader.resolve(module.url)).then(l=>{
-                    module.source = l;
-                    delete module.pending;
-                    return this.modules[module.uri] = module;
-                })
-            }
-        };
-        return Promise.resolve().then(loadProject).then(loadLibrary).then(loadModule).then(loadScript).then(m=>{
-            if(!m.pending && m.source){
-                this.evaluate(m.uri)
-            }
-            return m;
-        });
+        return loadModule(uri).then(m=>{
+            setTimeout(()=>{
+                for(var i in modules){
+                    i = this.system.modules[i];
+                }
+            });
+            return this.system.modules[m.uri];
+        })
     }
     evaluate(uri){
         throw new Error('Loader.execute is abstract method');
@@ -297,13 +321,16 @@ export class BrowserLoader extends Loader {
             }
         });
     }
-    evaluate(uri){
-        var module = this.module(uri);
-        var script = document.createElement("script");
-        script.id = module.uri;
-        script.type = "text/javascript";
-        script.text = module.source+'\n//# sourceURL='+module.url;
-        document.getElementsByTagName("head")[0].appendChild(script);
+    evaluate(module){
+        if(!module.evaluated){
+            module.evaluated = true;
+            console.info("EVALUATE",module.uri);
+            var script = document.createElement("script");
+            script.id = module.uri;
+            script.type = "text/javascript";
+            script.text = module.source+'\n//# sourceURL='+module.url;
+            document.getElementsByTagName("head")[0].appendChild(script);
+        }
         return module;
     }
 }

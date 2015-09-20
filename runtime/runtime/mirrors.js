@@ -92,8 +92,7 @@ export class Declaration {
         return `${this.constructor.name}(${this.uri})`
     }
 }
-
-export class System extends Declaration {
+export class System  {
     get platform(): Platform {
         return Object.defineProperty(this,'platform',{
             enumerable      : true,
@@ -133,6 +132,30 @@ export class System extends Declaration {
     module(name,definer){
        new Module(this,name,definer);
     }
+    constructor(){
+        this.loader.setup({
+            default     : this,
+            global      : global,
+            Type        : Type,
+            Instance    : Instance,
+            Platform    : Platform,
+            System      : System,
+            Module      : Module,
+            Class       : Class,
+            Import      : Import,
+            Export      : Export,
+            Field       : Field,
+            Method      : Method
+        });
+        this.loader.load()
+        .then(module=>{
+            if(typeof module.default=='function'){
+                module.default();
+            }
+        }).catch(e=>{
+            console.error(e.stack);
+        });
+    }
 }
 export class Module extends Declaration {
     definitions : Array<Declaration>;
@@ -168,7 +191,7 @@ export class Module extends Declaration {
             Object.defineProperty(this,'exports',{
                 enumerable      : true,
                 writable        : false,
-                configurable    : false,
+                configurable    : true,
                 value           : {[MIRROR]:this}
             });
             Object.defineProperty(this,'private',{
@@ -178,53 +201,73 @@ export class Module extends Declaration {
                 value           : {}
             });
             definer.bind(this.private)(this);
-            var self = this;
-            Declaration.accessor(this.owner.modules,this.uri,{
-                enumerable      :true,
-                configurable    :true,
-                initializer     :function(){
-                    try {
-                        Object.keys(config.exports).forEach(uri=> {
-                            var exports = config.exports[uri];
-                            for(var local in exports){
-                                var remote = exports[local]=='*'?local:exports[local];
-                                self.define(new Export(self,uri,local,remote));
-                            }
-                        });
-                        Object.keys(config.imports).forEach(uri=> {
-                            var imports = config.imports[uri];
-                            for(var local in imports){
-                                var remote = imports[local]=='*'?local:imports[local];
-                                self.define(new Import(self, uri,local,remote));
-                            }
-                        });
-                    }catch(ex){
-                        console.error(ex);
-                    }
-                    /*setTimeout(()=>{
-                        var i = self.exports.default;
-                        for(i in self.exports){
-                            i = self.exports[i];
-                        }
-                        for(i in self.private){
-                            i = self.private[i];
-                        }
-                    });*/
-                    return self.exports;
-                }
-            });
+
         }else
         if(typeof definer == 'object'){
-            Object.defineProperty(this,'exports',{
+            var config = owner.loader.module(uri);
+            Object.defineProperty(this,'owner',{
                 enumerable      : true,
                 writable        : false,
                 configurable    : false,
+                value           : owner
+            });
+            Object.defineProperty(this,'uri',{
+                enumerable      : true,
+                writable        : false,
+                configurable    : false,
+                value           : config.uri
+            });
+            Object.defineProperty(this,'name',{
+                enumerable      : true,
+                writable        : false,
+                configurable    : false,
+                value           : this.uri
+            });
+            Object.defineProperty(this,'exports',{
+                enumerable      : true,
+                writable        : false,
+                configurable    : true,
                 value           : {[MIRROR]:this}
             });
             for(var i in definer){
-                this.exports = definer[i];
+                this.exports[i] = definer[i];
             }
         }
+        var self = this;
+        Declaration.accessor(this.owner.modules,this.uri,{
+            enumerable      :true,
+            configurable    :true,
+            initializer     :function(){
+                try {
+                    Object.keys(config.exports).forEach(uri=> {
+                        var exports = config.exports[uri];
+                        for(var local in exports){
+                            var remote = exports[local]=='*'?local:exports[local];
+                            self.define(new Export(self,uri,local,remote));
+                        }
+                    });
+                    Object.keys(config.imports).forEach(uri=> {
+                        var imports = config.imports[uri];
+                        for(var local in imports){
+                            var remote = imports[local]=='*'?local:imports[local];
+                            self.define(new Import(self, uri,remote,local));
+                        }
+                    });
+                }catch(ex){
+                    console.error(ex);
+                }
+                setTimeout(()=> {
+                    var i = self.exports.default;
+                    for (i in self.exports) {
+                        i = self.exports[i];
+                    }
+                    for (i in self.private) {
+                        i = self.private[i];
+                    }
+                });
+                return self.exports;
+            }
+        });
         //console.info(this.toString());
     }
     define(definition){
@@ -443,7 +486,11 @@ export class Import extends Declaration {
                 enumerable   : true,
                 writable     : true,
                 initializer  : function(){
-                    return Asx.modules[uri][self.remote];
+                    if(self.remote=='*'){
+                        return Asx.modules[uri];
+                    }else{
+                        return Asx.modules[uri][self.remote];
+                    }
                 }
             };
             return descriptor;

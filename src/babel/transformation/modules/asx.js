@@ -83,10 +83,8 @@ export default class AsxFormatter extends DefaultFormatter {
                     if(item.expression._class){
                         classes.push(this.convertClass(item.expression));
                         return;
-                    }else{
-                        console.info(item)
                     }
-
+                break;
                 case 'FunctionDeclaration':
                     methods.push(this.convertMethod(item));
                     return;

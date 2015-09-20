@@ -1,6 +1,6 @@
 {
-  "name" : "project-c",
-  "version" : "0.0.1",
-  "platforms" : ["node","browser"],
-  "main" : "module-a"
+  "name"          : "project-c",
+  "version"       : "0.0.1",
+  "platforms"     : ["node","browser"],
+  "main"          : "models"
 }

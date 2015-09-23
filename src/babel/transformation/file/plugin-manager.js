@@ -1,4 +1,3 @@
-import * as node from  "../../api/node";
 import * as messages from "../../messages";
 import * as util from  "../../util";
 
@@ -11,10 +10,10 @@ export default class PluginManager {
       if (plugin.container === fn) return plugin.transformer;
     }
 
-    var transformer = fn(node);
+    var transformer = fn();
     PluginManager.memoisedPlugins.push({
-      container: fn,
-      transformer: transformer
+      container   : fn,
+      transformer : transformer
     });
     return transformer;
   }

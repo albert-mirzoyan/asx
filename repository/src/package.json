@@ -1,6 +1,8 @@
 {
-  "output"                : "../out",
-  "modules"               : {
+  "output"                 : "../out",
+  "modules"                : {
+    "./asx-server"         : "compile",
+    "./asx-test"           : "compile",
     "./project-a"          : "compile",
     "./project-b"          : "compile",
     "./project-c"          : "compile"

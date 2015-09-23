@@ -138,15 +138,14 @@ export class Loader {
     load(uri=this.executable){
         var modules = {};
         return this.loadModule(uri,modules).then(m=>{
-            setTimeout(()=>{
-                for(var i in modules){
-                    i = this.system.modules[i];
-                }
-            });
+            for(var i in modules){
+                i = this.system.modules[i];
+            }
             return this.system.modules[m.uri];
         })
     }
     loadProjectVersions(uri){
+
         var pid = Loader.getProject(uri);
         if(!pid){
             throw new Error(`Invalid project URI '${uri}'`);
@@ -161,6 +160,7 @@ export class Loader {
         }
         if(project.pending && !project.loading){
             project.loading = true;
+            project.promises = [];
             return this.loadJson(project.url).then(patch=>{
                 delete project.pending;
                 delete project.loading;
@@ -168,9 +168,26 @@ export class Loader {
                     project[key] = patch[key];
                 }
                 return project;
+            }).then(p=>{
+                project.promises.forEach(promise=>{
+                    promise.accept(p);
+                });
+                delete project.promises;
+                return p;
+            }).catch(e=>{
+                project.promises.forEach(promise=>{
+                    promise.reject(e);
+                });
+                delete project.promises;
+                throw e;
+            })
+        }else
+        if(project.loading){
+            return new Promise((accept,reject)=>{
+                project.promises.push({accept,reject});
             })
         }else{
-            return Promise.resolve(project)
+            return Promise.resolve(project);
         }
     }
     loadProjectInstance(uri){
@@ -189,6 +206,7 @@ export class Loader {
             }
             if(project.pending && !project.loading){
                 project.loading = true;
+                project.promises = [];
                 return this.loadJson(project.url).then(patch=>{
                     delete project.pending;
                     delete project.loading;
@@ -213,6 +231,23 @@ export class Loader {
                         }
                     }
                     return project;
+                }).then(p=>{
+                    project.promises.forEach(promise=>{
+                        promise.accept(p);
+                    });
+                    delete project.promises;
+                    return p;
+                }).catch(e=>{
+                    project.promises.forEach(promise=>{
+                        promise.reject(e);
+                    });
+                    delete project.promises;
+                    throw e;
+                })
+            } else
+            if(project.loading){
+                return new Promise((accept,reject)=>{
+                    project.promises.push({accept,reject});
                 })
             }else{
                 return Promise.resolve(project)
@@ -225,11 +260,29 @@ export class Loader {
             var module = project.modules[mid];
             if(module.pending && !module.loading){
                 module.loading = true;
+                module.promises = [];
                 return this.loadText(module.url).then(source=>{
                     delete module.pending;
                     delete module.loading;
                     module.source = source;
                     return module;
+                }).then(p=>{
+                    module.promises.forEach(promise=>{
+                        promise.accept(p);
+                    });
+                    delete module.promises;
+                    return p;
+                }).catch(e=>{
+                    module.promises.forEach(promise=>{
+                        promise.reject(e);
+                    });
+                    delete module.promises;
+                    throw e;
+                })
+            }else
+            if(project.loading){
+                return new Promise((accept,reject)=>{
+                    project.promises.push({accept,reject});
                 })
             }else{
                 return Promise.resolve(module)
@@ -278,7 +331,13 @@ export class Loader {
 }
 
 export class NodeLoader extends Loader {
-    static MODULES = ['fs','http','https'];
+    static MODULES = [
+        'fs','http','https','path','url','vm',
+        'query','buffer','child_process','assert',
+        'crypto','dns','events','net','os','process',
+        'punycode','querystring','stream','string_decoder',
+        'readline','util','zlib'
+    ];
     static get FS(){
         return Object.defineProperty(this, 'FS', {
             value: require('fs')
@@ -325,9 +384,6 @@ export class NodeLoader extends Loader {
             writable        : false,
             value           : process.argv[2]
         }).executable;
-    }
-    load(uri=this.executable){
-        return super.load();
     }
     loadText(path){
         return new Promise((accept, reject)=> {

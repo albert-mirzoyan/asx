@@ -22,7 +22,6 @@ export default function (code, opts = {}) {
   };
 
   if (opts.nonStandard) {
-    parseOpts.plugins.jsx = true;
     parseOpts.plugins.flow = true;
   }
 

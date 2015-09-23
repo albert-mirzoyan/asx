@@ -1,9 +1,15 @@
-import toFastProperties from "to-fast-properties";
 import compact from "lodash/array/compact";
 import assign from "lodash/object/assign";
 import each from "lodash/collection/each";
 import uniq from "lodash/array/uniq";
-
+function toFastProperties(obj) {
+  /*jshint -W027*/
+  function f() {}
+  f.prototype = obj;
+  new f();
+  return;
+  eval(obj);
+}
 var t = exports;
 
 /**
@@ -11,7 +17,7 @@ var t = exports;
  * Pass `skipAliasCheck` to force it to directly compare `node.type` with `type`.
  */
 
-function registerType(type: string, skipAliasCheck?: boolean) {
+function registerType(type: string, skipAliasCheck: boolean) {
   var is = t[`is${type}`] = function (node, opts) {
     return t.is(type, node, opts, skipAliasCheck);
   };
@@ -79,7 +85,7 @@ export const TYPES = Object.keys(t.VISITOR_KEYS).concat(Object.keys(t.FLIPPED_AL
  * Optionally, pass `skipAliasCheck` to directly compare `node.type` with `type`.
  */
 
-export function is(type: string, node: Object, opts?: Object, skipAliasCheck?: boolean): boolean {
+export function is(type: string, node: Object, opts: Object, skipAliasCheck: boolean): boolean {
   if (!node) return false;
 
   var matches = isType(node.type, type);
@@ -97,7 +103,7 @@ export function isType(nodeType, targetType) {
 
   var aliases = t.FLIPPED_ALIAS_KEYS[targetType];
   if (aliases) {
-    for (var alias of (aliases: Array)) {
+    for (var alias of aliases) {
       if (nodeType === alias) return true;
     }
   }
@@ -140,7 +146,7 @@ each(t.BUILDER_KEYS, function (keys, type) {
 export function shallowEqual(actual: Object, expected: Object): boolean {
   var keys = Object.keys(expected);
 
-  for (var key of (keys: Array)) {
+  for (var key of keys) {
     if (actual[key] !== expected[key]) {
       return false;
     }
@@ -153,7 +159,7 @@ export function shallowEqual(actual: Object, expected: Object): boolean {
  * Description
  */
 
-export function appendToMemberExpression(member: Object, append: Object, computed?: boolean): Object {
+export function appendToMemberExpression(member: Object, append: Object, computed: boolean): Object {
   member.object   = t.memberExpression(member.object, member.property, member.computed);
   member.property = append;
   member.computed = !!computed;
@@ -224,7 +230,7 @@ export function cloneDeep(node: Object): Object {
  * parsed nodes of `React.createClass` and `React["createClass"]`.
  */
 
-export function buildMatchMemberExpression(match:string, allowPartial?: boolean): Function {
+export function buildMatchMemberExpression(match:string, allowPartial: boolean): Function {
   var parts = match.split(".");
 
   return function (member) {

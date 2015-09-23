@@ -1,9 +1,20 @@
 import {NodeLoader} from './loader';
 import {BrowserLoader} from './loader';
 
+
 export const MIRROR = Symbol.for('mirror');
 export const SUPER = Symbol.for('super');
 
+export class Mirror {
+    static reflect(instance){
+        if(instance[MIRROR]){
+            return instance[MIRROR];
+        }else
+        if(instance.constructor[MIRROR]){
+            return instance.constructor[MIRROR];
+        }
+    }
+}
 export class Platform {
     static NODE     = new Platform('NODE');
     static BROWSER  = new Platform('BROWSER');
@@ -133,28 +144,39 @@ export class System  {
        new Module(this,name,definer);
     }
     constructor(){
-        this.loader.setup({
-            default     : this,
-            global      : global,
-            Type        : Type,
-            Instance    : Instance,
-            Platform    : Platform,
-            System      : System,
-            Module      : Module,
-            Class       : Class,
-            Import      : Import,
-            Export      : Export,
-            Field       : Field,
-            Method      : Method
-        });
-        this.loader.load()
-        .then(module=>{
-            if(typeof module.default=='function'){
-                module.default();
-            }
-        }).catch(e=>{
+        try {
+            this.loader.setup({
+                default     : this,
+                global      : global,
+                Type        : Type,
+                Loader      : (()=>{
+                    switch(this.platform){
+                        case Platform.BROWSER   : return BrowserLoader;
+                        case Platform.NODE      : return NodeLoader;
+                    }
+                })(),
+                Instance    : Instance,
+                Platform    : Platform,
+                System      : System,
+                Module      : Module,
+                Class       : Class,
+                Import      : Import,
+                Export      : Export,
+                Field       : Field,
+                Mirror      : Mirror,
+                Method      : Method
+            });
+            this.loader.load()
+            .then(module=> {
+                if (typeof module.default == 'function') {
+                    module.default();
+                }
+            }).catch(e=> {
+                console.error(e.stack);
+            });
+        }catch(e){
             console.error(e.stack);
-        });
+        }
     }
 }
 export class Module extends Declaration {
@@ -200,6 +222,12 @@ export class Module extends Declaration {
                 configurable    : false,
                 value           : {}
             });
+            Object.defineProperty(this,'proxies',{
+                enumerable      : true,
+                writable        : false,
+                configurable    : true,
+                value           : []
+            });
             definer.bind(this.private)(this);
 
         }else
@@ -229,6 +257,12 @@ export class Module extends Declaration {
                 configurable    : true,
                 value           : {[MIRROR]:this}
             });
+            Object.defineProperty(this,'proxies',{
+                enumerable      : true,
+                writable        : false,
+                configurable    : true,
+                value           : []
+            });
             for(var i in definer){
                 this.exports[i] = definer[i];
             }
@@ -238,37 +272,57 @@ export class Module extends Declaration {
             enumerable      :true,
             configurable    :true,
             initializer     :function(){
-                try {
-                    Object.keys(config.exports).forEach(uri=> {
-                        var exports = config.exports[uri];
-                        for(var local in exports){
-                            var remote = exports[local]=='*'?local:exports[local];
-                            self.define(new Export(self,uri,local,remote));
+                if(!self.initializing){
+                    self.initializing = true;
+                    try {
+                        Object.keys(config.exports).forEach(uri=> {
+                            var exports = config.exports[uri];
+                            for(var local in exports){
+                                var remote = exports[local]=='*'?local:exports[local];
+                                self.define(new Export(self,uri,local,remote));
+                            }
+                        });
+                        Object.keys(config.imports).forEach(uri=> {
+                            var imports = config.imports[uri];
+                            for(var local in imports){
+                                var remote = imports[local]=='*'?local:imports[local];
+                                self.define(new Import(self, uri,remote,local));
+                            }
+                        });
+                    }catch(ex){
+                        console.error(ex);
+                    }
+
+                    if(self.proxies.length){
+                        self.proxies.forEach(p=>p());
+                    }
+                    delete self.proxies;
+
+                    var i;
+                    if(self.private){
+                        for (i in self.private) {
+                            if(i!='default'){
+                                i = self.private[i];
+                            }
                         }
-                    });
-                    Object.keys(config.imports).forEach(uri=> {
-                        var imports = config.imports[uri];
-                        for(var local in imports){
-                            var remote = imports[local]=='*'?local:imports[local];
-                            self.define(new Import(self, uri,remote,local));
+                        i=self.private.default;
+                    }
+                    if(self.exports){
+                        for (i in self.exports) {
+                            if(i!='default'){
+                                i = self.exports[i];
+                            }
                         }
-                    });
-                }catch(ex){
-                    console.error(ex);
+                        i=self.exports.default;
+                    }
+
+
+
                 }
-                setTimeout(()=> {
-                    var i = self.exports.default;
-                    for (i in self.exports) {
-                        i = self.exports[i];
-                    }
-                    for (i in self.private) {
-                        i = self.private[i];
-                    }
-                });
+                delete self.initializing;
                 return self.exports;
             }
         });
-        //console.info(this.toString());
     }
     define(definition){
         if(definition instanceof Export){
@@ -277,7 +331,11 @@ export class Module extends Declaration {
         }else
         if(definition instanceof Import){
             this.definitions.push(definition);
-            Declaration.accessor(this.private,definition.name,definition.initialize());
+            if(definition.name=='*'){
+                this.proxies.push(definition.initialize().initializer);
+            }else{
+                Declaration.accessor(this.private,definition.name,definition.initialize());
+            }
         }else
         if(definition instanceof Class){
             this.definitions.push(definition);
@@ -359,22 +417,31 @@ export class Class extends Declaration {
         Object.defineProperty(this,'definitions',{
             enumerable      : true,
             writable        : false,
-            configurable    : false,
+            configurable    : true,
             value           : []
         });
         if(typeof definer == 'function'){
             definer(this);
-            this.definitions = this.definitions.filter(d=>{
-                if(d instanceof Method && d.name=='constructor'){
-                    Class.properties.forEach(key=>{
-                        var option = Object.getOwnPropertyDescriptor(d,key);
-                        if(option){
-                            Object.defineProperty(this,key,option);
-                        }
-                    });
-                    this.reflectee[MIRROR] = this;
-                }
+            Object.defineProperty(this,'definitions',{
+                enumerable      : true,
+                writable        : false,
+                configurable    : false,
+                value           : this.definitions.filter(d=>{
+                    if(d instanceof Method && d.name=='constructor'){
+                        Class.properties.forEach(key=>{
+                            var option = Object.getOwnPropertyDescriptor(d,key);
+                            if(option){
+                                Object.defineProperty(this,key,option);
+                            }
+                        });
+                        this.reflectee[MIRROR] = this;
+                        return false;
+                    }else{
+                        return true;
+                    }
+                })
             });
+
         }
         //console.info(this.toString());
         this.initialize = ()=>{
@@ -391,7 +458,6 @@ export class Class extends Declaration {
                         configurable    : true,
                         value           : _this.reflectee
                     });
-
                     if(_this.extends){
                         Class.extends(_this.reflectee,_this.extends);
                     }
@@ -400,11 +466,6 @@ export class Class extends Declaration {
                             Class.implements(_this.reflectee,d);
                         });
                     }
-                    if(_this.decorators && _this.decorators.length){
-                        _this.decorators.forEach(d=>{
-                            d.call(_this,_this.reflectee);
-                        })
-                    }
                     _this.definitions.forEach(d=>{
                         if(d.isStatic){
                             Declaration.accessor(_this.reflectee,d.name,d.initialize());
@@ -412,11 +473,14 @@ export class Class extends Declaration {
                             Declaration.accessor(_this.reflectee.prototype,d.name,d.initialize());
                         }
                     });
-                    setTimeout(()=>{
-                        for(var i in _this.reflectee){
-                            i = _this.reflectee[i];
-                        }
-                    });
+                    if(_this.decorators && _this.decorators.length){
+                        _this.decorators.forEach(d=>{
+                            d.call(_this,_this.reflectee);
+                        })
+                    }
+                    for(var i in _this.reflectee){
+                        i = _this.reflectee[i];
+                    }
                     return _this.reflectee;
                 }
             };

@@ -5,8 +5,8 @@ var through = require('through2');
 
 var paths = {
     runtime     : {
-        out:'repository/out',
-        src:[
+        out     : 'repository/out',
+        src     : [
             'runtime/runtime/utils/url.js',
             'runtime/runtime/decorators.js',
             'runtime/runtime/loader.js',
@@ -15,6 +15,10 @@ var paths = {
             'runtime/runtime/reflect.js',
             'runtime/index.js'
         ]
+    },
+    compiler    : {
+        out     : 'lib',
+        src     : 'src/**/*.js'
     }
 };
 
@@ -57,6 +61,16 @@ gulp.task("runtime", function () {
         .pipe(concat("runtime.js", {newLine: '\n\n'}))
         .pipe(printFileHelpers())
         .pipe(gulp.dest(paths.runtime.out));
+});
+gulp.task("compiler", function () {
+    return gulp.src(paths.compiler.src)
+        .pipe(babel({
+            stage           : 0
+        })).on('error',function (error) {
+            console.error(error.stack);
+            this.emit('end');
+        })
+        .pipe(gulp.dest(paths.compiler.out));
 });
 
 gulp.task("watch-runtime", function(){

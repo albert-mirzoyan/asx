@@ -2,11 +2,9 @@ import convertSourceMap from "convert-source-map";
 import * as optionParsers from "./option-parsers";
 import moduleFormatters from "../modules";
 import PluginManager from "./plugin-manager";
-import shebangRegex from "shebang-regex";
 import TraversalPath from "../../traversal/path";
 import isFunction from "lodash/lang/isFunction";
 import isAbsolute from "path-is-absolute";
-import resolveRc from "../../tools/resolve-rc";
 import sourceMap from "source-map";
 import transform from "./../index";
 import generate from "../../generation";
@@ -22,7 +20,6 @@ import Scope from "../../traversal/scope";
 import slash from "slash";
 import clone from "lodash/lang/clone";
 import * as util from  "../../util";
-import * as api from  "../../api/node";
 import path from "path";
 import each from "lodash/collection/each";
 import * as t from "../../types";
@@ -111,11 +108,7 @@ export default class File {
       this.project = opts.project;
       delete opts.project;
     }
-    if (opts.filename) {
-      var rcFilename = opts.filename;
-      if (!isAbsolute(rcFilename)) rcFilename = path.join(process.cwd(), rcFilename);
-      opts = resolveRc(rcFilename, opts);
-    }
+
 
     //
 
@@ -546,7 +539,6 @@ export default class File {
     this.code = code;
 
     if (parseCode) {
-      this.parseShebang();
       this.addAst(this.parse(this.code));
     }
   }
@@ -579,13 +571,7 @@ export default class File {
     return code;
   }
 
-  parseShebang() {
-    var shebangMatch = shebangRegex.exec(this.code);
-    if (shebangMatch) {
-      this.shebang = shebangMatch[0];
-      this.code = this.code.replace(shebangRegex, "");
-    }
-  }
+
 
   generate(){
     var opts = this.opts;

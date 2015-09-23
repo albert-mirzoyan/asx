@@ -1,7 +1,7 @@
 {
   "name": "asx",
   "description": "Compile ES6 code into ES5",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "author": "Sergey Mamyan <sergey.mamyan@gmail.com>",
   "repository": "casser/asx",
   "main": "./lib/compiler.js",
@@ -9,11 +9,9 @@
     "asxc": "./lib/compiler.js"
   },
   "dependencies": {
-    "acorn-jsx": "^1.0.0",
     "ast-types": "~0.7.0",
     "chalk": "^1.0.0",
     "convert-source-map": "^1.1.0",
-    "core-js": "^0.9.0",
     "debug": "^2.1.1",
     "detect-indent": "^3.0.0",
     "esquery": "^0.4.0",
@@ -31,29 +29,14 @@
     "regenerator": "^0.8.20",
     "regexpu": "^1.1.2",
     "repeating": "^1.1.2",
-    "shebang-regex": "^1.0.0",
     "slash": "^1.0.0",
     "source-map": "^0.4.0",
-    "strip-json-comments": "^1.0.2",
-    "to-fast-properties": "^1.0.0",
     "trim-right": "^1.0.0"
   },
   "devDependencies": {
-    "babel": "5.5.8",
-    "babel-eslint": "^2.0.0",
-    "bluebird": "^2.9.25",
-    "browserify": "^9.0.8",
-    "chai": "^2.2.0",
-    "eslint": "^0.18.0",
-    "esvalid": "^1.1.0",
     "gulp": "^3.9.0",
     "gulp-babel": "^5.2.1",
     "gulp-concat": "^2.6.0",
-    "istanbul": "^0.3.5",
-    "matcha": "^0.6.0",
-    "mocha": "2.2.0",
-    "rimraf": "^2.3.2",
-    "through2": "^2.0.0",
-    "uglify-js": "^2.4.16"
+    "through2": "^2.0.0"
   }
 }

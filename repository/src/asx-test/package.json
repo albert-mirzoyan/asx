@@ -1,0 +1,6 @@
+{
+  "name"          : "asx-test",
+  "version"       : "0.0.1",
+  "platforms"     : ["node","browser"],
+  "main"          : "index"
+}

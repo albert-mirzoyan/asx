@@ -1,28 +1,25 @@
 import "./patch";
 
-import escapeRegExp from "lodash/string/escapeRegExp";
-import buildDebug from "debug/node";
-import cloneDeep from "lodash/lang/cloneDeep";
-import isBoolean from "lodash/lang/isBoolean";
+import escapeRegExp from "../lodash/string/escapeRegExp";
+import cloneDeep from "../lodash/lang/cloneDeep";
+import isBoolean from "../lodash/lang/isBoolean";
 import * as messages from "./messages";
-import minimatch from "minimatch";
-import contains from "lodash/collection/contains";
+import contains from "../lodash/collection/contains";
 import traverse from "./traversal";
-import isString from "lodash/lang/isString";
-import isRegExp from "lodash/lang/isRegExp";
+import isString from "../lodash/lang/isString";
+import isRegExp from "../lodash/lang/isRegExp";
 import Module from "module";
-import isEmpty from "lodash/lang/isEmpty";
+import isEmpty from "../lodash/lang/isEmpty";
 import parse from "./helpers/parse";
 import path from "path";
-import each from "lodash/collection/each";
-import has from "lodash/object/has";
+import each from "../lodash/collection/each";
+import has from "../lodash/object/has";
 import fs from "fs";
 import * as t from "./types";
-import slash from "slash";
 
 export { inherits, inspect } from "util";
 
-export var debug = buildDebug("babel");
+export function debug(){}
 
 export function canCompile(filename: string, altExts?: Array<string>) {
   var exts = altExts || canCompile.EXTENSIONS;
@@ -70,15 +67,8 @@ export function list(val: string): Array<string> {
   }
 }
 
-export function regexify(val: any): RegExp {
-  if (!val) return new RegExp(/.^/);
-  if (Array.isArray(val)) val = new RegExp(val.map(escapeRegExp).join("|"), "i");
-  if (isString(val)) return minimatch.makeRe(val, { nocase: true });
-  if (isRegExp(val)) return val;
-  throw new TypeError("illegal type for regexify");
-}
 
-export function arrayify(val: any, mapFn?: Function): Array {
+export function arrayify(val: any, mapFn: Function): Array {
   if (!val) return [];
   if (isBoolean(val)) return arrayify([val], mapFn);
   if (isString(val)) return arrayify(list(val), mapFn);

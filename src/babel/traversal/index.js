@@ -1,7 +1,7 @@
 import TraversalContext from "./context";
 import { explode, verify } from "./visitors";
 import * as messages from "../messages";
-import includes from "lodash/collection/includes";
+import includes from "../../lodash/collection/includes";
 import * as t from "../types";
 
 export default function traverse(parent, opts, scope, state, parentPath) {

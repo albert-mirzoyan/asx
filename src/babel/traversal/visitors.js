@@ -1,7 +1,7 @@
 import * as virtualTypes from "./path/virtual-types";
 import * as messages from "../messages";
 import * as t from "../types";
-import esquery from "esquery";
+
 
 export function explode(visitor, mergeConflicts) {
   // make sure there's no __esModule type since this is because we're using loose mode
@@ -57,7 +57,7 @@ export function explode(visitor, mergeConflicts) {
     // clear it form the visitor
     delete visitor[nodeType];
 
-    for (var alias of (aliases: Array)) {
+    for (var alias of aliases) {
       var existing = visitor[alias];
       if (existing) {
         if (mergeConflicts) {
@@ -124,6 +124,7 @@ function addQueries(visitor) {
 }
 
 function addSelector(visitor, selector, fns) {
+  var esquery = require('esquery');
   selector = esquery.parse(selector);
 
   for (var key in fns) {

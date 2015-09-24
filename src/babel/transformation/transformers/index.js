@@ -18,7 +18,7 @@ export default {
 
   _validation:                             require("./internal/validation"),
 
-  "validation.undeclaredVariableCheck":    require("./validation/undeclared-variable-check"),
+  //"validation.undeclaredVariableCheck":    require("./validation/undeclared-variable-check"),
 
   // this goes at the start so we only transform the original user code
   "spec.functionName":                     require("./spec/function-name"),
@@ -56,7 +56,7 @@ export default {
   "es6.forOf":                             require("./es6/for-of"),
 
   "es6.regex.sticky":                      require("./es6/regex.sticky"),
-  "es6.regex.unicode":                     require("./es6/regex.unicode"),
+  //"es6.regex.unicode":                     require("./es6/regex.unicode"),
 
   "es6.constants":                         require("./es6/constants"),
 

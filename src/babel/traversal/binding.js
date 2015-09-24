@@ -33,7 +33,7 @@ export default class Binding {
    * Description
    */
 
-  assignTypeGeneric(type: Object, params?) {
+  assignTypeGeneric(type: Object, params) {
     var typeParams = null;
     if (params) params = t.typeParameterInstantiation(params);
     this.assignType(t.genericTypeAnnotation(t.identifier(type), typeParams));

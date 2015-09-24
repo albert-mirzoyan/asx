@@ -1,7 +1,7 @@
-import compact from "lodash/array/compact";
-import assign from "lodash/object/assign";
-import each from "lodash/collection/each";
-import uniq from "lodash/array/uniq";
+import compact from "../../lodash/array/compact";
+import assign from "../../lodash/object/assign";
+import each from "../../lodash/collection/each";
+import uniq from "../../lodash/array/uniq";
 function toFastProperties(obj) {
   /*jshint -W027*/
   function f() {}

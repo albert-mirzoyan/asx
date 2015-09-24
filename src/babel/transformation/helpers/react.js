@@ -1,4 +1,4 @@
-import isString from "lodash/lang/isString";
+import isString from "../../../lodash/lang/isString";
 import * as t from "../../types";
 
 var isCreateClassCallExpression = t.buildMatchMemberExpression("React.createClass");

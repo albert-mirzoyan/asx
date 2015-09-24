@@ -2,8 +2,8 @@ import traverse from "../../../traversal";
 import object from "../../../helpers/object";
 import * as util from  "../../../util";
 import * as t from "../../../types";
-import values from "lodash/object/values";
-import extend from "lodash/object/extend";
+import values from "../../../../lodash/object/values";
+import extend from "../../../../lodash/object/extend";
 
 function isLet(node, parent) {
   if (!t.isVariableDeclaration(node)) return false;

@@ -1,4 +1,3 @@
-import repeating from "repeating";
 import * as t from "../../types";
 
 export function WithStatement(node, print) {

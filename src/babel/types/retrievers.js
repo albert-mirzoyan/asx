@@ -23,7 +23,7 @@ export function getBindingIdentifiers(node: Object): Object {
         search.push(node.declaration);
       }
     } else if (keys) {
-      for (var key of (keys: Array)) {
+      for (var key of keys) {
         search = search.concat(id[key] || []);
       }
     }

@@ -1,27 +1,25 @@
-import convertSourceMap from "convert-source-map";
+//import convertSourceMap from "convert-source-map";
 import * as optionParsers from "./option-parsers";
 import moduleFormatters from "../modules";
 import PluginManager from "./plugin-manager";
 import TraversalPath from "../../traversal/path";
-import isFunction from "lodash/lang/isFunction";
-import isAbsolute from "path-is-absolute";
-import sourceMap from "source-map";
+import isFunction from "../../../lodash/lang/isFunction";
+//import sourceMap from "source-map";
 import transform from "./../index";
 import generate from "../../generation";
 import stringify from "../../helpers/stringify-ast";
 import codeFrame from "../../helpers/code-frame";
-import defaults from "lodash/object/defaults";
-import includes from "lodash/collection/includes";
+import defaults from "../../../lodash/object/defaults";
+import includes from "../../../lodash/collection/includes";
 import traverse from "../../traversal";
-import assign from "lodash/object/assign";
+import assign from "../../../lodash/object/assign";
 import Logger from "./logger";
 import parse from "../../helpers/parse";
 import Scope from "../../traversal/scope";
-import slash from "slash";
-import clone from "lodash/lang/clone";
+import clone from "../../../lodash/lang/clone";
 import * as util from  "../../util";
 import path from "path";
-import each from "lodash/collection/each";
+import each from "../../../lodash/collection/each";
 import * as t from "../../types";
 
 var checkTransformerVisitor = {
@@ -143,15 +141,10 @@ export default class File {
       }
     }
 
-    if (opts.inputSourceMap) {
+    /*if (opts.inputSourceMap) {
       opts.sourceMaps = true;
-    }
+    }*/
 
-    // normalize windows path separators to unix
-    opts.filename = slash(opts.filename);
-    if (opts.sourceRoot) {
-      opts.sourceRoot = slash(opts.sourceRoot);
-    }
 
     if (opts.moduleId) {
       opts.moduleIds = true;
@@ -159,8 +152,7 @@ export default class File {
 
     opts.basename = path.basename(opts.filename, path.extname(opts.filename));
 
-    opts.ignore = util.arrayify(opts.ignore, util.regexify);
-    opts.only   = util.arrayify(opts.only, util.regexify);
+
 
     defaults(opts, {
       moduleRoot: opts.sourceRoot
@@ -373,7 +365,7 @@ export default class File {
   }
 
   mergeSourceMap(map: Object) {
-    var opts = this.opts;
+    /*var opts = this.opts;
 
     var inputMap = opts.inputSourceMap;
 
@@ -389,7 +381,7 @@ export default class File {
       mergedMap.sources = inputMap.sources
       mergedMap.file    = inputMap.file;
       return mergedMap;
-    }
+    }*/
 
     return map;
   }
@@ -493,14 +485,7 @@ export default class File {
     code = code + "";
 
     try {
-      if (this.shouldIgnore()) {
-        return {
-          metadata: {},
-          code:     code,
-          map:      null,
-          ast:      null
-        };
-      }
+
 
       callback();
 
@@ -543,10 +528,7 @@ export default class File {
     }
   }
 
-  shouldIgnore() {
-    var opts = this.opts;
-    return util.shouldIgnore(opts.filename, opts.ignore, opts.only);
-  }
+
 
   call(key: string) {
     var stack = this.transformerStack;
@@ -558,7 +540,7 @@ export default class File {
   }
 
   parseInputSourceMap(code: string) {
-    var opts = this.opts;
+    /*var opts = this.opts;
 
     if (opts.inputSourceMap !== false) {
       var inputMap = convertSourceMap.fromSource(code);
@@ -566,7 +548,7 @@ export default class File {
         opts.inputSourceMap = inputMap.toObject();
         code = convertSourceMap.removeComments(code);
       }
-    }
+    }*/
 
     return code;
   }
@@ -609,7 +591,7 @@ export default class File {
       result.code = `${this.shebang}\n${result.code}`;
     }
 
-    if (result.map) {
+    /*if (result.map) {
       result.map = this.mergeSourceMap(result.map);
     }
 
@@ -619,7 +601,7 @@ export default class File {
 
     if (opts.sourceMaps === "inline") {
       result.map = null;
-    }
+    }*/
 
     return result;
   }

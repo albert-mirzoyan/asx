@@ -1,5 +1,5 @@
 import estraverse from "estraverse";
-import extend from "lodash/object/extend";
+import extend from "../lodash/object/extend";
 import types from "ast-types";
 import * as t from "./types";
 

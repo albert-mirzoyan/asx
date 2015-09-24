@@ -1,5 +1,4 @@
-import isInteger from "is-integer";
-import isNumber from "lodash/lang/isNumber";
+import isNumber from "../../../lodash/lang/isNumber";
 import * as t from "../../types";
 
 export function UnaryExpression(node, print) {
@@ -160,7 +159,7 @@ export function MemberExpression(node, print) {
     this.push("]");
   } else {
     // 5..toFixed(2);
-    if (t.isLiteral(obj) && isInteger(obj.value) && !SCIENTIFIC_NOTATION.test(obj.value.toString())) {
+    if (t.isLiteral(obj) && Number.isInteger(obj.value) && !SCIENTIFIC_NOTATION.test(obj.value.toString())) {
       this.push(".");
     }
 

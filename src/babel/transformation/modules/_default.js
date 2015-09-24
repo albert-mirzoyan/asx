@@ -1,6 +1,6 @@
 import * as messages from "../../messages";
 import traverse from "../../traversal";
-import extend from "lodash/object/extend";
+import extend from "../../../lodash/object/extend";
 import object from "../../helpers/object";
 import * as util from  "../../util";
 import * as t from "../../types";

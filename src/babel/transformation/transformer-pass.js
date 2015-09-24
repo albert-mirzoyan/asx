@@ -1,4 +1,4 @@
-import includes from "lodash/collection/includes";
+import includes from "../../lodash/collection/includes";
 import traverse from "../traversal";
 
 /**

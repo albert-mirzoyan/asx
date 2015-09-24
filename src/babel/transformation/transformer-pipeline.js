@@ -1,6 +1,6 @@
 import Transformer from "./transformer";
 import normalizeAst from "../helpers/normalize-ast";
-import assign from "lodash/object/assign";
+import assign from "../../lodash/object/assign";
 import object from "../helpers/object";
 import File from "./file";
 

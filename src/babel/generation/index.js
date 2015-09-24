@@ -1,12 +1,12 @@
-import detectIndent from "detect-indent";
 import Whitespace from "./whitespace";
-import repeating from "repeating";
+
+import {StringUtil} from "../../utils/string";
 import SourceMap from "./source-map";
 import Position from "./position";
 import * as messages from "../messages";
 import Buffer from "./buffer";
-import extend from "lodash/object/extend";
-import each from "lodash/collection/each";
+import extend from "../../lodash/object/extend";
+import each from "../../lodash/collection/each";
 import n from "./node";
 import * as t from "../types";
 
@@ -28,10 +28,6 @@ class CodeGenerator {
 
   static normalizeOptions(code, opts, tokens) {
     var style = "  ";
-    if (code) {
-      var indent = detectIndent(code).indent;
-      if (indent && indent !== " ") style = indent;
-    }
 
     var format = {
       retainLines: opts.retainLines,
@@ -377,7 +373,7 @@ class CodeGenerator {
         }
 
         var indent = Math.max(this.indentSize(), column);
-        val = val.replace(/\n/g, `\n${repeating(" ", indent)}`);
+        val = val.replace(/\n/g, `\n${StringUtil.repeat(" ", indent)}`);
       }
 
       if (column === 0) {

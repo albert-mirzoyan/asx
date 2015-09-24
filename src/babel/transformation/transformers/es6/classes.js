@@ -4,8 +4,8 @@ import * as defineMap from "../../helpers/define-map";
 import * as messages from "../../../messages";
 import * as util from  "../../../util";
 import traverse from "../../../traversal";
-import each from "lodash/collection/each";
-import has from "lodash/object/has";
+import each from "../../../../lodash/collection/each";
+import has from "../../../../lodash/object/has";
 import Ast from "../../../helpers/ast-utils";
 import * as t from "../../../types";
 export function ClassDeclaration(node, parent, scope, file) {

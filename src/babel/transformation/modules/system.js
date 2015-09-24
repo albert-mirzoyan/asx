@@ -1,9 +1,9 @@
 import DefaultFormatter from "./_default";
 import AMDFormatter from "./amd";
 import * as util from  "../../util";
-import last from "lodash/array/last";
-import each from "lodash/collection/each";
-import map from "lodash/collection/map";
+import last from "../../../lodash/array/last";
+import each from "../../../lodash/collection/each";
+import map from "../../../lodash/collection/map";
 import * as t from "../../types";
 
 var hoistVariablesVisitor = {

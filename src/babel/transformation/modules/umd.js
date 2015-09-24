@@ -1,6 +1,6 @@
 import DefaultFormatter from "./_default";
 import AMDFormatter from "./amd";
-import values from "lodash/object/values";
+import values from "../../../lodash/object/values";
 import path from "path";
 import * as util from  "../../util";
 import * as t from "../../types";

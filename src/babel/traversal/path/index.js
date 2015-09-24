@@ -1,16 +1,16 @@
 import PathHoister from "./hoister";
 import * as virtualTypes from "./virtual-types";
-import isBoolean from "lodash/lang/isBoolean";
-import isNumber from "lodash/lang/isNumber";
-import isRegExp from "lodash/lang/isRegExp";
-import isString from "lodash/lang/isString";
+import isBoolean from "../../../lodash/lang/isBoolean";
+import isNumber from "../../../lodash/lang/isNumber";
+import isRegExp from "../../../lodash/lang/isRegExp";
+import isString from "../../../lodash/lang/isString";
 import codeFrame from "../../helpers/code-frame";
 import parse from "../../helpers/parse";
 import { explode } from "../visitors";
 import traverse from "../index";
-import includes from "lodash/collection/includes";
-import assign from "lodash/object/assign";
-import extend from "lodash/object/extend";
+import includes from "../../../lodash/collection/includes";
+import assign from "../../../lodash/object/assign";
+import extend from "../../../lodash/object/extend";
 import Scope from "../scope";
 import * as t from "../../types";
 

@@ -1,9 +1,9 @@
-import sourceMap from "source-map";
+//import sourceMap from "source-map";
 import * as t from "../types";
 
 export default class SourceMap {
   constructor(position, opts, code) {
-    this.position = position;
+    /*this.position = position;
     this.opts     = opts;
 
     if (opts.sourceMaps) {
@@ -11,24 +11,23 @@ export default class SourceMap {
         file: opts.sourceMapName,
         sourceRoot: opts.sourceRoot
       });
-
       this.map.setSourceContent(opts.sourceFileName, code);
     } else {
       this.map = null;
-    }
+    }*/
   }
 
   get() {
-    var map = this.map;
+    /*var map = this.map;
     if (map) {
       return map.toJSON();
     } else {
       return map;
-    }
+    }*/
   }
 
   mark(node, type) {
-    var loc = node.loc;
+    /*var loc = node.loc;
     if (!loc) return; // no location info
 
     var map = this.map;
@@ -49,6 +48,6 @@ export default class SourceMap {
       source: this.opts.sourceFileName,
       generated: generated,
       original: original
-    });
+    });*/
   }
 }

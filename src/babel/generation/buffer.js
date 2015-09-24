@@ -1,8 +1,7 @@
-import repeating from "repeating";
-import trimRight from "trim-right";
-import isBoolean from "lodash/lang/isBoolean";
-import includes from "lodash/collection/includes";
-import isNumber from "lodash/lang/isNumber";
+import {StringUtil} from "../../utils/string";
+import isBoolean from "../../lodash/lang/isBoolean";
+import includes from "../../lodash/collection/includes";
+import isNumber from "../../lodash/lang/isNumber";
 
 export default class Buffer {
   constructor(position, format) {
@@ -13,14 +12,14 @@ export default class Buffer {
   }
 
   get() {
-    return trimRight(this.buf);
+    return StringUtil.trimRight(this.buf);
   }
 
   getIndent() {
     if (this.format.compact || this.format.concise) {
       return "";
     } else {
-      return repeating(this.format.indent.style, this._indent);
+      return StringUtil.repeat(this.format.indent.style, this._indent);
     }
   }
 

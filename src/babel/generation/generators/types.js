@@ -1,4 +1,4 @@
-import each from "lodash/collection/each";
+import each from "../../../lodash/collection/each";
 
 export function Identifier(node) {
   this.push(node.name);

@@ -1,6 +1,6 @@
-import isBoolean from "lodash/lang/isBoolean";
-import each from "lodash/collection/each";
-import map from "lodash/collection/map";
+import isBoolean from "../../../lodash/lang/isBoolean";
+import each from "../../../lodash/collection/each";
+import map from "../../../lodash/collection/map";
 import * as t from "../../types";
 
 function crawl(node, state = {}) {
@@ -111,7 +111,6 @@ exports.nodes = {
     }
   }
 };
-
 exports.nodes.Property =
 exports.nodes.SpreadProperty = function (node, parent) {
   if (parent.properties[0] === node) {
@@ -120,7 +119,6 @@ exports.nodes.SpreadProperty = function (node, parent) {
     };
   }
 };
-
 exports.list = {
   VariableDeclaration(node) {
     return map(node.declarations, "init");
@@ -153,3 +151,5 @@ each({
     };
   });
 });
+
+export default exports;

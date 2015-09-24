@@ -1,5 +1,5 @@
 import TraversalPath from "./path";
-import compact from "lodash/array/compact";
+import compact from "../../lodash/array/compact";
 import * as t from "../types";
 
 export default class TraversalContext {

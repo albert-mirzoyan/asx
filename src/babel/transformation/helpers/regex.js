@@ -1,4 +1,4 @@
-import pull from "lodash/array/pull";
+import pull from "../../../lodash/array/pull";
 import * as t from "../../types";
 
 export function is(node, flag) {

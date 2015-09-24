@@ -1,5 +1,5 @@
 import DefaultFormatter from "./_default";
-import includes from "lodash/collection/includes";
+import includes from "../../../lodash/collection/includes";
 import * as util from  "../../util";
 import * as t from "../../types";
 

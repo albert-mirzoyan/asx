@@ -1,4 +1,4 @@
-import sortBy from "lodash/collection/sortBy";
+import sortBy from "../../lodash/collection/sortBy";
 
 /**
  * Returns `i`th number from `base`, continuing from 0 when `max` is reached.

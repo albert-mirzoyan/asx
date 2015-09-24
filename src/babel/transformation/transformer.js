@@ -1,12 +1,12 @@
 import TransformerPass from "./transformer-pass";
 import * as messages from "../messages";
-import isFunction from "lodash/lang/isFunction";
+import isFunction from "../../lodash/lang/isFunction";
 import traverse from "../traversal";
-import isObject from "lodash/lang/isObject";
-import assign from "lodash/object/assign";
+import isObject from "../../lodash/lang/isObject";
+import assign from "../../lodash/object/assign";
 import * as acorn from "../../acorn";
 import File from "./file";
-import each from "lodash/collection/each";
+import each from "../../lodash/collection/each";
 
 /**
  * This is the class responsible for normalising a transformers handlers

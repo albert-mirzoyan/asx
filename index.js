@@ -10,7 +10,8 @@ Module._resolveFilename = function(request, parent) {
         babel[filename.replace(babelPrefix,'')] = true;
     }else
     if(filename.indexOf(externalPrefix)==0){
-        external[filename.replace(externalPrefix,'').split('/')[0]] = true;
+        var path = filename.replace(externalPrefix,'').split('/');
+        external[path.shift()] = parent.id;
     }
     return filename;
 };
@@ -38,9 +39,22 @@ function readDirRecursive(dir) {
     return files;
 }
 readDirRecursive('./src').forEach(function(p){
-    p =p.replace(babelSrcPrefix,'')
+    p =p.replace(babelSrcPrefix,'');
     if(!babel[p]){
-        console.info(p)
+        if(p.indexOf('transformation/templates')<0){
+            var ourFile = PATH.resolve(babelPrefix,p);
+            if(FS.existsSync(ourFile)) {
+                console.info('DELETE ', ourFile);
+                FS.unlinkSync(ourFile);
+            }
+            var srcFile = PATH.resolve(babelSrcPrefix,p);
+            if(FS.existsSync(srcFile)){
+                console.info('DELETE ',srcFile);
+                FS.unlinkSync(srcFile);
+            }
+        }else{
+            console.info('TEMPLATE ',p);
+        }
     }
 });
 for(var i in pack.dependencies){
@@ -48,4 +62,4 @@ for(var i in pack.dependencies){
         console.info('UNUSED',i)
     }
 }
-console.info(Object.keys(external))
+console.info(external)

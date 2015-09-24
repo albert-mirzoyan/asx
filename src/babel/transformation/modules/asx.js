@@ -1,7 +1,7 @@
 import DefaultFormatter from "./_default";
 import CommonFormatter from "./common";
-import includes from "lodash/collection/includes";
-import values from "lodash/object/values";
+import includes from "../../../lodash/collection/includes";
+import values from "../../../lodash/object/values";
 import * as util from  "../../util";
 import * as t from "../../types";
 import Ast from "../../helpers/ast-utils";

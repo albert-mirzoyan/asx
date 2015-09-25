@@ -1,2 +1,0 @@
-Asx.module(MODULE_NAME,MODULE_BODY);
-

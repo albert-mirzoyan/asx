@@ -1,5 +1,5 @@
-import transform from '../babel/transformation/index'
-import {Files} from '../utils/files'
+import transform from '../transformer/index'
+import {Files} from './utils/files'
 
 export class Project {
     static getProjectVersion(path){
@@ -57,12 +57,12 @@ export class Project {
     compileSource(file) {
         try {
             var result = transform(file.source, {
-                project: this,
-                code: true,
-                stage: 0,
-                filename: file.path,
-                moduleId: this.name+'/'+file.name,
-                modules: 'asx'
+                project     : this,
+                code        : true,
+                stage       : 0,
+                filename    : file.path,
+                moduleId    : this.name+'/'+file.name,
+                modules     : 'asx'
             });
             file.output = result.code;
         } catch (ex) {

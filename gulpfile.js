@@ -7,18 +7,18 @@ var paths = {
     runtime     : {
         out     : 'repository/out',
         src     : [
-            'runtime/runtime/utils/url.js',
-            'runtime/runtime/decorators.js',
-            'runtime/runtime/loader.js',
-            'runtime/runtime/system.js',
-            'runtime/runtime/mirrors.js',
-            'runtime/runtime/reflect.js',
-            'runtime/index.js'
+            'src/runtime/loader.js',
+            'src/runtime/mirrors.js',
+            'src/runtime/index.js'
         ]
     },
+    transformer : {
+        out     : 'lib/transformer',
+        src     : 'src/transformer/**/*.js'
+    },
     compiler    : {
-        out     : 'lib',
-        src     : 'src/**/*.js'
+        out     : 'lib/compiler',
+        src     : 'src/compiler/**/*.js'
     }
 };
 
@@ -61,6 +61,16 @@ gulp.task("runtime", function () {
         .pipe(concat("runtime.js", {newLine: '\n\n'}))
         .pipe(printFileHelpers())
         .pipe(gulp.dest(paths.runtime.out));
+});
+gulp.task("transformer", function () {
+    return gulp.src(paths.transformer.src)
+        .pipe(babel({
+            stage           : 0
+        })).on('error',function (error) {
+            console.error(error.stack);
+            this.emit('end');
+        })
+        .pipe(gulp.dest(paths.transformer.out));
 });
 gulp.task("compiler", function () {
     return gulp.src(paths.compiler.src)

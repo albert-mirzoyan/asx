@@ -1,3 +1,4 @@
+
 function params(a:Type=56,...rest:String):String{
     return (a)=>{
         for(var i of a){
@@ -9,9 +10,9 @@ function params(a:Type=56,...rest:String):String{
 }
 
 function factorial(n, acc = 1) {
-    "use strict";
     console.info(a).catch();
     var foo = {
+        hello(){},
         catch: function () {},
         get bar() {
             return "bar";

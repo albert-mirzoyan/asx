@@ -12,12 +12,14 @@ Module._resolveFilename = function(request, parent) {
     if(filename.indexOf(externalPrefix)==0){
         var path = filename.replace(externalPrefix,'').split('/');
         external[path.shift()] = parent.id;
+    }else{
+        console.info(request)
     }
     return filename;
 };
-require('./lib/compiler');
+require('./lib/compiler/compiler').Compiler.run();
 Module._resolveFilename =_resolveFilename;
-
+/*
 var FS = require('fs');
 var PATH = require('path');
 var pack = require('./package.json');
@@ -45,12 +47,12 @@ readDirRecursive('./src').forEach(function(p){
             var ourFile = PATH.resolve(babelPrefix,p);
             if(FS.existsSync(ourFile)) {
                 console.info('DELETE ', ourFile);
-                FS.unlinkSync(ourFile);
+                //FS.unlinkSync(ourFile);
             }
             var srcFile = PATH.resolve(babelSrcPrefix,p);
             if(FS.existsSync(srcFile)){
                 console.info('DELETE ',srcFile);
-                FS.unlinkSync(srcFile);
+                //FS.unlinkSync(srcFile);
             }
         }else{
             console.info('TEMPLATE ',p);
@@ -62,4 +64,4 @@ for(var i in pack.dependencies){
         console.info('UNUSED',i)
     }
 }
-console.info(external)
+console.info(external)*/

@@ -6,9 +6,17 @@
   "repository": "casser/asx",
   "main": "./lib/compiler.js",
   "bin": {
-    "asxc": "./lib/compiler.js"
+    "asxc"  : "./lib/compiler.js",
+    "asx"   : "./lib/cli.js"
   },
-
+  "scripts":{
+    "build-runtime"    : "./tools/build-runtime",
+    "watch-runtime"    : "./tools/build-runtime -w",
+    "build-translator" : "babel --stage 0 --out-dir lib/translator src/translator",
+    "watch-translator" : "babel --stage 0 --out-dir lib/translator src/translator -w",
+    "build-main"       : "babel --stage 0 --out-dir lib src/main",
+    "watch-main"       : "babel --stage 0 --out-dir lib src/main -w"
+  },
   "devDependencies": {
     "gulp": "^3.9.0",
     "gulp-babel": "^5.2.1",

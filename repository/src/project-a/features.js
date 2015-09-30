@@ -3,7 +3,7 @@ function params(a:Type=56,...rest:String):String{
     return (a)=>{
         for(var i of a){
             while(i?a:rest){
-
+                a(`hello ${a} jan`);
             }
         }
     }

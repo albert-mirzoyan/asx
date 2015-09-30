@@ -1,5 +1,0 @@
-export default {
-  "useStrict": "strict",
-  "es5.runtime": "runtime",
-  "es6.runtime": "runtime"
-}

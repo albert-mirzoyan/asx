@@ -3,9 +3,5 @@
   "version"       : "0.0.1",
   "platforms"     : ["node"],
   "main"          : "index",
-  "dependencies"  : {
-    "path"        : "cjs:path@builtin",
-    "url"         : "cjs:url@builtin",
-    "some"        : "asx:some@latest"
-  }
+  "cjs"           : ["path","fs","http","https","url"]
 }

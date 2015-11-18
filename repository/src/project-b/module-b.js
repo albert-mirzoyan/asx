@@ -14,6 +14,7 @@ class Base {
         return 'Hello';
     }
 }
+
 class Shared extends Base{
     constructor(name){
         super(name);

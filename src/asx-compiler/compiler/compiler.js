@@ -67,9 +67,11 @@ export class Compiler {
       if(!args.length){
         args.push(process.cwd())
       }
-      console.info(args)
+      var runtimeDir = Files.resolve(Files.dirname(process.mainModule.filename),'../out');
       var srcPath = args[0] ? Files.resolve(args[0]):Files.resolve('.');
-      var outPath = args[1] ? Files.resolve(args[1]):null;
+      var outPath = args[1] ? Files.resolve(args[1]):runtimeDir;
+      console.info(process.title,srcPath,outPath);
+      this.installRuntime(outPath,runtimeDir);
       var config  = this.load(srcPath);
       if(config.modules){
         this.multi(config,outPath).forEach(c=>c.compile(watch));
@@ -81,6 +83,18 @@ export class Compiler {
       console.error(ex.stack);
     }
   }
+
+  static installRuntime(outPath,runtimeDir){
+    var runtimePath = Files.resolve(outPath,'runtime.js');
+    var runtimeFile = Files.resolve(runtimeDir,'runtime.js');
+    if(!Files.isFile(runtimePath)){
+      console.info(`runtime  : ${runtimeFile}`);
+      Files.copyFile(runtimeFile,runtimePath);
+    }
+    //console.info(runtimePath,Files.isFile(runtimePath));
+    //Files.writeFile(Files.resolve(out,file.path),file.output);
+  }
+
   constructor(config){
     this.config = config;
   }
@@ -97,7 +111,9 @@ export class Compiler {
       return file.ext && file.ext.match(/^.*(bak|log|temp).*$/gi);
     }
   }
+
   compile(watch){
+
     watch = this.config.watch = (this.config.watch || watch);
     var sources=[], resources=[];
     var out = this.config.outPath;

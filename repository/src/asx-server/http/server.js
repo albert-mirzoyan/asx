@@ -106,8 +106,10 @@ export class Server {
     }
     start(){
         console.info('Starting Server At ',this.config.host,this.config.port);
-        Object.keys(Server.handlers).forEach(name=>{
-            this.handlers[name] = new (Server.handlers[name].configure(this,this.config[name]))();
+        Object.keys(this.config).forEach(name=>{
+            if(Server.handlers[name]) {
+                this.handlers[name] = new (Server.handlers[name].configure(this, this.config[name]))();
+            }
         });
         this.server = new HTTP.Server();
         this.server.on('upgrade',this.doUpgrade);

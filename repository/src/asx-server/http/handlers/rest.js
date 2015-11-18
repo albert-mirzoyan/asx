@@ -81,6 +81,7 @@ export class RestHandler extends Handler {
         var method = req.method.toUpperCase();
         var headers = req.headers;
         var query = url.query;
+
         if(url.pathname==root){
             res.writeHead(200,{
                 'Content-Type': 'application/json'
@@ -155,6 +156,8 @@ export class RestHandler extends Handler {
                 }));
             }
 
+        }else{
+            console.info('NOT REST')
         }
     }
 }

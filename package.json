@@ -4,23 +4,15 @@
   "version": "0.0.2",
   "author": "Sergey Mamyan <sergey.mamyan@gmail.com>",
   "repository": "casser/asx",
-  "main": "./lib/compiler.js",
+  "main": "./bin/asx.js",
   "bin": {
-    "asxc"  : "./lib/compiler.js",
-    "asx"   : "./lib/cli.js"
+    "asx"   : "./bin/asx.js",
+    "asxc"  : "./bin/asxc.js"
   },
   "scripts":{
-    "build-runtime"    : "./tools/build-runtime",
-    "watch-runtime"    : "./tools/build-runtime -w",
-    "build-translator" : "babel --stage 0 --out-dir lib/translator src/translator",
-    "watch-translator" : "babel --stage 0 --out-dir lib/translator src/translator -w",
-    "build-main"       : "babel --stage 0 --out-dir lib src/main",
-    "watch-main"       : "babel --stage 0 --out-dir lib src/main -w"
-  },
-  "devDependencies": {
-    "gulp": "^3.9.0",
-    "gulp-babel": "^5.2.1",
-    "gulp-concat": "^2.6.0",
-    "through2": "^2.0.0"
+    "build"            : "node ./tools/build runtime translator compiler",
+    "build-runtime"    : "node ./tools/build runtime",
+    "build-translator" : "node ./tools/build translator",
+    "build-compiler"   : "node ./tools/build compiler"
   }
 }

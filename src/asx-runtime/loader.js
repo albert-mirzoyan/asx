@@ -489,7 +489,7 @@ export class BrowserLoader extends Loader {
         });
     }
     evaluate(module){
-        if(!module.evaluated){
+        if(!module.evaluated && module.source){
             module.evaluated = true;
             var script = document.createElement("script");
             script.id = module.uri;

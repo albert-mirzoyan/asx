@@ -42,6 +42,7 @@ export class Project {
         this.dependencies = {}
     }
     compile() {
+        console.info(`project  : ${this.config.name}`);
         this.sources.forEach(s=>this.compileSource(s));
         Object.keys(this.dependencies).forEach(k=> {
             var v = this.dependencies[k];
@@ -59,12 +60,14 @@ export class Project {
     }
     compileSource(file) {
         try {
+            var module = this.name+'/'+file.name;
+            console.info(`  module : ${module}`);
             var result = transform(file.source, {
                 project     : this,
                 code        : true,
                 stage       : 0,
                 filename    : file.path,
-                moduleId    : this.name+'/'+file.name,
+                moduleId    : module,
                 modules     : 'asx'
             });
             file.output = result.code;

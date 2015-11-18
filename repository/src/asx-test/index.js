@@ -1,8 +1,9 @@
 import {Server} from 'asx-server/http/server';
 import {rest} from 'asx-server/http/rest';
 
-import 'asx-server/http/handlers/files';
 import 'asx-server/http/handlers/rest';
+import 'asx-server/http/handlers/files';
+
 
 @rest('/resource')
 class Resource {

@@ -121,7 +121,7 @@ function build_main(name){
             })
         }
         if(result.metadata.usedHelpers){
-            result.metadata.usedHelpers.forEach(helper=>{
+            result.metadata.usedHelpers.forEach(function(helper){
                 if(helpers.indexOf(helper)<0){
                     helpers.push(helper);
                 }
@@ -151,19 +151,11 @@ function build_main(name){
 function watch_main(){
     build_main();
 }
-
-
-function build_translator(){
-
-}
-function build_compiler(){
-
-}
 function build_runtime(){
     var helpers = [].concat(config.helpers); var sources = [];
     var src  = path.resolve(config.src,config.runtime.name);
     var out  = path.resolve(config.out,'runtime.js');
-    config.runtime.files.forEach((n=>{
+    config.runtime.files.forEach(function(n){
         var file = path.resolve(src,n);
         var result = babel.transform(fs.readFileSync(file),{
             stage           : 0,
@@ -174,13 +166,13 @@ function build_runtime(){
         });
         sources.push(result.code);
         if(result.metadata.usedHelpers){
-            result.metadata.usedHelpers.forEach(helper=>{
+            result.metadata.usedHelpers.forEach(function(helper){
                 if(helpers.indexOf(helper)<0){
                     helpers.push(helper);
                 }
             })
         }
-    }));
+    });
     sources.unshift(babel.buildExternalHelpers(helpers,'var'));
     sources.unshift('(function(global){');
     sources.push('})(typeof global!="undefined"?global:self);');
@@ -188,13 +180,15 @@ function build_runtime(){
     fs.writeFileSync(out,sources);
 }
 
+makeDirRecursive(config.out)
 
 
-
-if(process.argv.indexOf('-w')>=0){
-    watch_main();
-}else{
-    build_main('translator');
-    build_main('compiler');
+if(process.argv.indexOf('runtime')>=0){
     build_runtime();
+}
+if(process.argv.indexOf('translator')>=0){
+    build_main('translator');
+}
+if(process.argv.indexOf('compiler')>=0){
+    build_main('compiler');
 }
